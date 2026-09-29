@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.BusGo" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/navy</item>
+        <!-- Android 12+ system splash: navy with the bus icon, then our animated splash takes over -->
+        <item name="android:windowSplashScreenBackground">@color/navy</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/navy</item>
+    </style>
+</resources>

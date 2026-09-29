@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- BusGo launcher icon: front view of an orange bus. 108x108 adaptive-icon canvas,
+     artwork kept inside the 66dp safe zone so no launcher shape crops it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- wheels -->
+    <path android:fillColor="#1E1D33" android:pathData="M38,74h7v8a1.5,1.5 0 0 1 -1.5,1.5h-4a1.5,1.5 0 0 1 -1.5,-1.5z" />
+    <path android:fillColor="#1E1D33" android:pathData="M63,74h7v8a1.5,1.5 0 0 1 -1.5,1.5h-4a1.5,1.5 0 0 1 -1.5,-1.5z" />
+    <!-- mirrors -->
+    <path android:fillColor="#FFFFFF" android:pathData="M30,38h3v10h-3z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M75,38h3v10h-3z" />
+    <!-- body -->
+    <path android:fillColor="#FFB84D" android:pathData="M40,27h28a6,6 0 0 1 6,6v39a3,3 0 0 1 -3,3h-34a3,3 0 0 1 -3,-3v-39a6,6 0 0 1 6,-6z" />
+    <!-- roof strip -->
+    <path android:fillColor="#F59E2E" android:pathData="M40,27h28a6,6 0 0 1 6,6v2h-40v-2a6,6 0 0 1 6,-6z" />
+    <!-- destination sign -->
+    <path android:fillColor="#2E2C54" android:pathData="M44,29.5h20v4h-20z" />
+    <path android:fillColor="#F7934C" android:pathData="M47,31h14v1h-14z" />
+    <!-- windscreen -->
+    <path android:fillColor="#BFE3F5" android:pathData="M39,37h30a2,2 0 0 1 2,2v15a2,2 0 0 1 -2,2h-30a2,2 0 0 1 -2,-2v-15a2,2 0 0 1 2,-2z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.5" android:pathData="M41,56l7,-19h4l-7,19z" />
+    <path android:fillColor="#F59E2E" android:pathData="M53.2,37h1.6v19h-1.6z" />
+    <!-- headlights -->
+    <path android:fillColor="#FFFFFF" android:pathData="M44,64m-3.2,0a3.2,3.2 0 1 0 6.4,0a3.2,3.2 0 1 0 -6.4,0" />
+    <path android:fillColor="#FFFFFF" android:pathData="M64,64m-3.2,0a3.2,3.2 0 1 0 6.4,0a3.2,3.2 0 1 0 -6.4,0" />
+    <!-- grille -->
+    <path android:fillColor="#2E2C54" android:pathData="M49,61h10v6h-10z" />
+    <!-- bumper -->
+    <path android:fillColor="#2E2C54" android:pathData="M33,70h42v4a2,2 0 0 1 -2,2h-38a2,2 0 0 1 -2,-2z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M50,71.3h8v2.6h-8z" />
+</vector>
