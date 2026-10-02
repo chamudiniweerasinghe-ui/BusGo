@@ -1,5 +1,6 @@
 package com.busgo.app
 
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -15,6 +16,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Request Notification Runtime Permission (Android 13+)
+        requestNotificationPermission()
+
         // Retrieve Firebase Cloud Messaging device token
         fetchFcmToken()
 
@@ -29,6 +33,19 @@ class MainActivity : ComponentActivity() {
         setContent {
             BusGoTheme {
                 BusGoNavGraph()
+            }
+        }
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissions(
+                    arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                    101
+                )
             }
         }
     }

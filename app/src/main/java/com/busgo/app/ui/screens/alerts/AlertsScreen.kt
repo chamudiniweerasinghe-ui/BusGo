@@ -47,6 +47,19 @@ import com.busgo.app.ui.components.map.*
 
 @Composable
 fun AlertsScreen(alerts: List<AlertItem>, onViewOnMap: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var realAlerts by remember { mutableStateOf<List<AlertItem>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        com.busgo.app.data.AlertNetworkManager.getAlerts(context) { fetched ->
+            if (fetched.isNotEmpty()) {
+                realAlerts = fetched
+            }
+        }
+    }
+
+    val displayAlerts = if (realAlerts.isNotEmpty()) realAlerts else alerts
+
     Column(Modifier.fillMaxSize().background(Cream)) {
         NavyHeader(title = "Alerts", leading = { GridLogo() }, actions = { LiveBadge(onDark = true) }) {
             VSpace(10.dp)
@@ -61,7 +74,7 @@ fun AlertsScreen(alerts: List<AlertItem>, onViewOnMap: () -> Unit) {
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(alerts, key = { it.id }) { a ->
+            items(displayAlerts, key = { it.id }) { a ->
                 if (a.type == AlertType.EMERGENCY) EmergencyAlertCard(a, onViewOnMap) else AlertRow(a)
             }
         }
