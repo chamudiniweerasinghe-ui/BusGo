@@ -68,8 +68,34 @@ fun RegisterFlow(
     val current = steps[index.coerceIn(0, steps.lastIndex)]
     val isLast = index == steps.lastIndex
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var loading by remember { mutableStateOf(false) }
+
     fun finish() {
         if (form.accountType == AccountType.BUS) onBusRegistered(form.toBus()) else onPassengerRegistered()
+    }
+
+    fun handleFinish() {
+        loading = true
+        val role = if (form.accountType == AccountType.BUS) "driver" else "passenger"
+        com.busgo.app.data.AuthNetworkManager.register(
+            context = context,
+            fullName = form.fullName,
+            email = form.email,
+            phone = form.phone,
+            password = form.password,
+            role = role,
+            emergencyName = form.contactName,
+            emergencyPhone = form.contactPhone
+        ) { success, message ->
+            loading = false
+            if (success) {
+                android.widget.Toast.makeText(context, "Registration successful!", android.widget.Toast.LENGTH_SHORT).show()
+                finish()
+            } else {
+                android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     androidx.activity.compose.BackHandler(enabled = index > 0) { index-- }
@@ -79,7 +105,7 @@ fun RegisterFlow(
             StepTopBar(
                 progress = (index + 1) / steps.size.toFloat(),
                 onBack = { if (index == 0) onBack() else index-- },
-                onSkip = if (current == RegisterStep.PREFERENCES) ({ finish() }) else null
+                onSkip = if (current == RegisterStep.PREFERENCES) ({ handleFinish() }) else null
             )
             AnimatedContent(
                 targetState = index,
@@ -119,8 +145,9 @@ fun RegisterFlow(
                     form.accountType == AccountType.BUS -> "Register bus"
                     else -> "Create account"
                 },
-                onClick = { if (isLast) finish() else index++ },
-                enabled = canContinue,
+                onClick = { if (isLast) handleFinish() else index++ },
+                enabled = canContinue && !loading,
+                loading = loading,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp)
             )
         }

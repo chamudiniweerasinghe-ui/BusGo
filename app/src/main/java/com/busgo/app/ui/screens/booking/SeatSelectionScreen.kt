@@ -53,7 +53,17 @@ fun SeatSelectionScreen(
     onContinue: (List<Int>) -> Unit
 ) {
     val bus = draft.bus ?: MockData.buses.first()
-    val seats = remember(bus.id) { MockData.seatsFor(bus) }
+    var loadedSeats by remember { mutableStateOf<List<Seat>>(emptyList()) }
+
+    LaunchedEffect(bus.id) {
+        com.busgo.app.data.BusNetworkManager.getBusSeats(bus.id) { fetched ->
+            if (fetched.isNotEmpty()) {
+                loadedSeats = fetched
+            }
+        }
+    }
+
+    val seats = if (loadedSeats.isNotEmpty()) loadedSeats else MockData.seatsFor(bus)
     var selected by remember { mutableStateOf(draft.seats) }
     val needed = draft.seatCount
 

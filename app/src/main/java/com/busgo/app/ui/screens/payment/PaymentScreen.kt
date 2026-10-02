@@ -101,18 +101,23 @@ fun PaymentScreen(
                     Text("Secured by Stripe", style = MaterialTheme.typography.bodySmall, color = Muted)
                 }
             }
+            val context = androidx.compose.ui.platform.LocalContext.current
             PillButton(
                 text = "Pay ${draft.totalFare.toLkr()}",
                 onClick = {
                     paying = true
-                    scope.launch {
-                        delay(1600) // replace with Stripe PaymentSheet result
+                    com.busgo.app.data.BookingNetworkManager.createBooking(context, draft) { success, message, ticket ->
                         paying = false
-                        onPaid()
+                        if (success) {
+                            android.widget.Toast.makeText(context, "Booking confirmed!", android.widget.Toast.LENGTH_SHORT).show()
+                            onPaid()
+                        } else {
+                            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
-                enabled = secondsLeft > 0,
+                enabled = secondsLeft > 0 && !paying,
                 loading = paying,
                 leadingIcon = Icons.Outlined.Lock
             )

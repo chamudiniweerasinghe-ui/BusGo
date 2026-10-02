@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.busgo.app.data.FcmNetworkManager
 import com.busgo.app.navigation.BusGoNavGraph
 import com.busgo.app.ui.theme.BusGoTheme
 import com.google.firebase.messaging.FirebaseMessaging
@@ -43,6 +44,9 @@ class MainActivity : ComponentActivity() {
             // Get new FCM registration token
             val token = task.result
             Log.d(TAG, "FCM Registration Token: $token")
+
+            // Register FCM token with backend
+            FcmNetworkManager.sendFcmTokenToBackend(applicationContext, fcmToken = token)
         }
     }
 

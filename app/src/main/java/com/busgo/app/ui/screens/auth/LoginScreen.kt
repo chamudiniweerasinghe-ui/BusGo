@@ -101,15 +101,29 @@ fun LoginScreen(
                 }
                 VSpace(24.dp)
             }
+            val context = androidx.compose.ui.platform.LocalContext.current
             Column(Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) {
                 PillButton(
                     "Log in",
                     onClick = {
+                        if (email.isBlank() || password.isBlank()) {
+                            android.widget.Toast.makeText(context, "Please enter email and password", android.widget.Toast.LENGTH_SHORT).show()
+                            return@PillButton
+                        }
                         loading = true
-                        scope.launch {
-                            delay(900) // fake network call
+                        com.busgo.app.data.AuthNetworkManager.login(context, email, password) { success, message, returnedRole ->
                             loading = false
-                            onLogin(role)
+                            if (success) {
+                                val targetRole = when (returnedRole?.lowercase()?.trim()) {
+                                    "driver" -> UserRole.DRIVER
+                                    "admin" -> UserRole.ADMIN
+                                    "operator" -> UserRole.OPERATOR
+                                    else -> role
+                                }
+                                onLogin(targetRole)
+                            } else {
+                                android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+                            }
                         }
                     },
                     loading = loading

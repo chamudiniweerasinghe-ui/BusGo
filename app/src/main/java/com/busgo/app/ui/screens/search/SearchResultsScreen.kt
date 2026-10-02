@@ -53,8 +53,26 @@ fun SearchResultsScreen(
     onBook: (Bus) -> Unit
 ) {
     var sort by rememberSaveable { mutableStateOf("Earliest") }
-    val buses = remember(draft.category, sort) {
-        val filtered = MockData.buses.filter { draft.category == null || it.category == draft.category }
+    var busesList by remember { mutableStateOf<List<Bus>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(draft.from, draft.to, draft.category) {
+        isLoading = true
+        com.busgo.app.data.BusNetworkManager.searchBuses(
+            origin = draft.from,
+            destination = draft.to,
+            category = draft.category?.label
+        ) { results ->
+            busesList = if (results.isNotEmpty()) results else MockData.buses.filter {
+                draft.category == null || it.category == draft.category
+            }
+            isLoading = false
+        }
+    }
+
+    val buses = remember(busesList, draft.category, sort) {
+        val currentList = if (busesList.isNotEmpty()) busesList else MockData.buses
+        val filtered = currentList.filter { draft.category == null || it.category == draft.category }
         when (sort) {
             "Cheapest" -> filtered.sortedBy { it.ratePerKm }
             "Most seats" -> filtered.sortedByDescending { it.seatsLeft }

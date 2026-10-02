@@ -47,6 +47,16 @@ import com.busgo.app.ui.components.map.*
 
 @Composable
 fun LiveTrackingScreen(bus: Bus, onBack: () -> Unit, onBook: () -> Unit) {
+    var routeStops by remember { mutableStateOf<List<Stop>>(MockData.routeStops) }
+
+    LaunchedEffect(bus.id) {
+        com.busgo.app.data.BusNetworkManager.getBusStops(bus.id) { fetchedStops ->
+            if (fetchedStops.isNotEmpty()) {
+                routeStops = fetchedStops
+            }
+        }
+    }
+
     // Simulated GPS movement (the "GPS simulator" idea from the proposal).
     val progress by rememberInfiniteTransition(label = "bus").animateFloat(
         initialValue = 0.12f,
@@ -88,7 +98,7 @@ fun LiveTrackingScreen(bus: Bus, onBack: () -> Unit, onBook: () -> Unit) {
             Box(Modifier.fillMaxWidth().height(mapHeight)) {
                 RouteMapCanvas(
                     progress = progress,
-                    stopNames = MockData.routeStops.map { it.name },
+                    stopNames = routeStops.map { it.name },
                     userStopIndex = 4,
                     modifier = Modifier.fillMaxSize()
                 )

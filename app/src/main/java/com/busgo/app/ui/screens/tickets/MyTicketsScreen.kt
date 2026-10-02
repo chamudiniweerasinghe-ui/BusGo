@@ -48,7 +48,19 @@ import com.busgo.app.ui.components.map.*
 @Composable
 fun MyTicketsScreen(tickets: List<Ticket>, onOpen: (Ticket) -> Unit) {
     var tab by rememberSaveable { mutableStateOf("Upcoming") }
-    val shown = tickets.filter {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var realTickets by remember { mutableStateOf<List<Ticket>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        com.busgo.app.data.BookingNetworkManager.getMyBookings(context) { fetched ->
+            if (fetched.isNotEmpty()) {
+                realTickets = fetched
+            }
+        }
+    }
+
+    val activeList = if (realTickets.isNotEmpty()) realTickets else tickets
+    val shown = activeList.filter {
         if (tab == "Upcoming") it.status == TicketStatus.UPCOMING else it.status != TicketStatus.UPCOMING
     }
     Column(Modifier.fillMaxSize().background(Cream)) {

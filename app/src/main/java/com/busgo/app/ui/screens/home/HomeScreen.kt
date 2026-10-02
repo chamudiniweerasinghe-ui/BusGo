@@ -57,7 +57,18 @@ fun HomeScreen(
     var departure by rememberSaveable { mutableFloatStateOf(0.35f) }
     val today = remember { LocalDate.now() }
     val dates = remember { (0..6).map { today.plusDays(it.toLong()) } }
-    val liveBuses = remember { MockData.buses.filter { it.speedKmh > 0 } }
+
+    var busesList by remember { mutableStateOf<List<Bus>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        com.busgo.app.data.BusNetworkManager.getAllBuses { fetched ->
+            busesList = if (fetched.isNotEmpty()) fetched else MockData.buses
+            isLoading = false
+        }
+    }
+
+    val liveBuses = (if (busesList.isNotEmpty()) busesList else MockData.buses).filter { it.speedKmh > 0 || it.etaMinutes > 0 }
 
     Column(
         Modifier
