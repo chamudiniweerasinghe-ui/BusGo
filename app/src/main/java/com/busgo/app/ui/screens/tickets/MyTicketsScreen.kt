@@ -52,7 +52,7 @@ fun MyTicketsScreen(tickets: List<Ticket>, onOpen: (Ticket) -> Unit) {
     var realTickets by remember { mutableStateOf<List<Ticket>>(emptyList()) }
 
     LaunchedEffect(Unit) {
-        com.busgo.app.data.BookingNetworkManager.getMyBookings(context) { fetched ->
+        com.busgo.app.data.TicketNetworkManager.getMyTickets(context) { fetched ->
             if (fetched.isNotEmpty()) {
                 realTickets = fetched
             }

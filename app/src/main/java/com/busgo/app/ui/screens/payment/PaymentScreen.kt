@@ -106,12 +106,19 @@ fun PaymentScreen(
                 text = "Pay ${draft.totalFare.toLkr()}",
                 onClick = {
                     paying = true
-                    com.busgo.app.data.BookingNetworkManager.createBooking(context, draft) { success, message, ticket ->
-                        paying = false
-                        if (success) {
-                            android.widget.Toast.makeText(context, "Booking confirmed!", android.widget.Toast.LENGTH_SHORT).show()
-                            onPaid()
+                    com.busgo.app.data.BookingNetworkManager.createPaymentIntent(context, draft) { success, message, clientSecret, pubKey, bookingId ->
+                        if (success && bookingId != null) {
+                            com.busgo.app.data.BookingNetworkManager.confirmMockPayment(context, bookingId) { confirmSuccess, confirmMsg ->
+                                paying = false
+                                if (confirmSuccess) {
+                                    android.widget.Toast.makeText(context, "Payment & Booking Confirmed!", android.widget.Toast.LENGTH_SHORT).show()
+                                    onPaid()
+                                } else {
+                                    android.widget.Toast.makeText(context, confirmMsg, android.widget.Toast.LENGTH_LONG).show()
+                                }
+                            }
                         } else {
+                            paying = false
                             android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
                         }
                     }
