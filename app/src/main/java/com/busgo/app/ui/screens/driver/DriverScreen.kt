@@ -1,5 +1,11 @@
 package com.busgo.app.ui.screens.driver
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Looper
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -25,6 +31,7 @@ import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -35,15 +42,23 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
+import androidx.core.content.ContextCompat
+import com.busgo.app.data.DriverNetworkManager
 import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
+import com.busgo.app.ui.components.map.*
 import com.busgo.app.ui.theme.*
 import com.busgo.app.util.*
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import java.time.LocalDate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.busgo.app.ui.components.map.*
 
 /** Bus account home: share GPS, verify tickets and report incidents. */
 @Composable
@@ -51,6 +66,85 @@ fun DriverScreen(bus: Bus, onReportIncident: () -> Unit, onLogout: () -> Unit) {
     var sharing by rememberSaveable { mutableStateOf(true) }
     var showScan by remember { mutableStateOf(false) }
     var boarded by rememberSaveable { mutableIntStateOf(0) }
+
+    val context = LocalContext.current
+    val fusedLocationClient: FusedLocationProviderClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+
+    var hasLocationPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+        val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+        hasLocationPermission = fineGranted || coarseGranted
+    }
+
+    LaunchedEffect(Unit) {
+        if (!hasLocationPermission) {
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+
+    // Lifecycle-safe periodic GPS updates (Target: 5s interval)
+    DisposableEffect(sharing, hasLocationPermission, bus.id) {
+        if (!sharing || !hasLocationPermission) {
+            return@DisposableEffect onDispose {}
+        }
+
+        val numericBusId = bus.id.replace("\\D".toRegex(), "").toIntOrNull() ?: 1
+
+        val locationRequest = LocationRequest.Builder(
+            Priority.PRIORITY_HIGH_ACCURACY,
+            5000L
+        ).setMinUpdateIntervalMillis(3000L).build()
+
+        val locationCallback = object : LocationCallback() {
+            override fun onLocationResult(locationResult: LocationResult) {
+                val loc = locationResult.lastLocation ?: return
+                DriverNetworkManager.updateDriverLocation(
+                    context = context,
+                    busId = numericBusId,
+                    latitude = loc.latitude,
+                    longitude = loc.longitude,
+                    speed = loc.speed.toDouble() * 3.6, // m/s to km/h
+                    heading = loc.bearing.toDouble()
+                ) { _, _ ->
+                    // Fail safely without interrupting UI
+                }
+            }
+        }
+
+        try {
+            fusedLocationClient.requestLocationUpdates(
+                locationRequest,
+                locationCallback,
+                Looper.getMainLooper()
+            )
+        } catch (e: SecurityException) {
+            Log.w("DriverScreen", "Location permission not granted", e)
+        }
+
+        onDispose {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+        }
+    }
 
     Column(
         Modifier
