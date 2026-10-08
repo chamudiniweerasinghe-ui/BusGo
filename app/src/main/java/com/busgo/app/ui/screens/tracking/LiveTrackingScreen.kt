@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -35,45 +36,85 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
+import com.busgo.app.data.BusNetworkManager
+import com.busgo.app.data.DriverNetworkManager
 import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
+import com.busgo.app.ui.components.map.*
 import com.busgo.app.ui.theme.*
 import com.busgo.app.util.*
 import java.time.LocalDate
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import com.busgo.app.ui.components.map.*
 
 @Composable
 fun LiveTrackingScreen(bus: Bus, onBack: () -> Unit, onBook: () -> Unit) {
+    val context = LocalContext.current
     var routeStops by remember { mutableStateOf<List<Stop>>(MockData.routeStops) }
+    var busLocation by remember { mutableStateOf<BusLocation?>(null) }
+    var secondsAgo by remember { mutableIntStateOf(1) }
 
+    val numericBusId = remember(bus.id) {
+        bus.id.replace("\\D".toRegex(), "").toIntOrNull() ?: 1
+    }
+
+    // Load route stops from backend
     LaunchedEffect(bus.id) {
-        com.busgo.app.data.BusNetworkManager.getBusStops(bus.id) { fetchedStops ->
+        BusNetworkManager.getBusStops(bus.id) { fetchedStops ->
             if (fetchedStops.isNotEmpty()) {
                 routeStops = fetchedStops
             }
         }
     }
 
-    // Simulated GPS movement (the "GPS simulator" idea from the proposal).
-    val progress by rememberInfiniteTransition(label = "bus").animateFloat(
-        initialValue = 0.12f,
-        targetValue = 0.62f,
-        animationSpec = infiniteRepeatable(tween(24000, easing = LinearEasing), RepeatMode.Reverse),
-        label = "progress"
-    )
-    var secondsAgo by remember { mutableIntStateOf(1) }
+    // Poll backend every 5 seconds for real driver GPS location
+    LaunchedEffect(numericBusId) {
+        while (isActive) {
+            DriverNetworkManager.getBusLocation(context, busId = numericBusId) { success, location, _ ->
+                if (success && location != null) {
+                    busLocation = location
+                    secondsAgo = 1
+                }
+            }
+            delay(5000L)
+        }
+    }
+
+    // Increment seconds ago timer
     LaunchedEffect(Unit) {
-        while (true) {
-            delay(1000)
-            secondsAgo = if (secondsAgo >= 4) 1 else secondsAgo + 1
+        while (isActive) {
+            delay(1000L)
+            secondsAgo = if (secondsAgo >= 60) 1 else secondsAgo + 1
+        }
+    }
+
+    // Calculate map progress from real GPS coordinates or fallback to bus progress
+    val routeProgress: Float = remember(busLocation) {
+        val loc = busLocation
+        if (loc != null && loc.latitude != 0.0) {
+            // Map Kurunegala (lat ~7.28) to Colombo Fort (lat ~6.93)
+            val startLat = 7.28
+            val endLat = 6.93
+            val currentLat = loc.latitude.coerceIn(endLat, startLat)
+            ((startLat - currentLat) / (startLat - endLat)).toFloat().coerceIn(0.05f, 0.95f)
+        } else {
+            0.25f
+        }
+    }
+
+    val updatedBus = remember(bus, busLocation) {
+        val loc = busLocation
+        if (loc != null) {
+            bus.copy(speedKmh = loc.speed.toInt())
+        } else {
+            bus
         }
     }
 
     Column(Modifier.fillMaxSize().background(Cream)) {
-        // navy header like the reference tracking screen
+        // navy header
         Row(
             Modifier
                 .fillMaxWidth()
@@ -87,17 +128,17 @@ fun LiveTrackingScreen(bus: Bus, onBack: () -> Unit, onBook: () -> Unit) {
             BusAvatar(size = 40.dp, container = Orange)
             HSpace(10.dp)
             Column(Modifier.weight(1f)) {
-                Text(bus.number, style = MaterialTheme.typography.titleMedium, color = Color.White)
-                Text(bus.operator, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
+                Text(updatedBus.number, style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Text(updatedBus.operator, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
             }
-            LiveBadge(text = "ON ROUTE", onDark = true)
+            LiveBadge(text = if (busLocation != null) "LIVE GPS" else "ON ROUTE", onDark = true)
         }
 
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
             val mapHeight = maxHeight * 0.46f
             Box(Modifier.fillMaxWidth().height(mapHeight)) {
                 RouteMapCanvas(
-                    progress = progress,
+                    progress = routeProgress,
                     stopNames = routeStops.map { it.name },
                     userStopIndex = 4,
                     modifier = Modifier.fillMaxSize()
@@ -109,13 +150,13 @@ fun LiveTrackingScreen(bus: Bus, onBack: () -> Unit, onBook: () -> Unit) {
                     modifier = Modifier.align(Alignment.TopEnd).padding(14.dp)
                 ) {
                     Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                        Text("${bus.etaMinutes} min", style = MaterialTheme.typography.titleLarge, color = OrangeDeep)
+                        Text("${updatedBus.etaMinutes} min", style = MaterialTheme.typography.titleLarge, color = OrangeDeep)
                         Text("to your stop", style = MaterialTheme.typography.bodySmall, color = Muted)
                     }
                 }
             }
             TrackingSheet(
-                bus, secondsAgo, onBook,
+                updatedBus, secondsAgo, onBook,
                 Modifier
                     .align(Alignment.BottomCenter)
                     .height(maxHeight * 0.58f)
