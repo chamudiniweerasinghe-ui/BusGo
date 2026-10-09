@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -35,19 +36,34 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
+import com.busgo.app.data.AuthNetworkManager
+import com.busgo.app.data.SessionManager
 import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
+import com.busgo.app.ui.components.map.*
 import com.busgo.app.ui.theme.*
 import com.busgo.app.util.*
 import java.time.LocalDate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.busgo.app.ui.components.map.*
 
 @Composable
 fun ProfileScreen(onSwitchRole: (UserRole) -> Unit, onLogout: () -> Unit) {
-    val user = MockData.passenger
+    val context = LocalContext.current
+    var loadedPassenger by remember { mutableStateOf<Passenger?>(null) }
+    var showEditDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        AuthNetworkManager.getProfile(context) { success, profile, _ ->
+            if (success && profile != null) {
+                loadedPassenger = profile.toPassenger()
+            }
+        }
+    }
+
+    val user = loadedPassenger ?: MockData.passenger
+
     Column(
         Modifier
             .fillMaxSize()
@@ -89,7 +105,9 @@ fun ProfileScreen(onSwitchRole: (UserRole) -> Unit, onLogout: () -> Unit) {
                         Text(user.emergencyName, style = MaterialTheme.typography.titleMedium, color = Ink)
                         Text("${user.emergencyRelation}, ${user.emergencyPhone}", style = MaterialTheme.typography.bodySmall, color = Muted)
                     }
-                    TextButton(onClick = { }) { Text("Edit", style = MaterialTheme.typography.labelMedium, color = OrangeDeep) }
+                    TextButton(onClick = { showEditDialog = true }) {
+                        Text("Edit", style = MaterialTheme.typography.labelMedium, color = OrangeDeep)
+                    }
                 }
             }
             VSpace(24.dp)
@@ -102,7 +120,106 @@ fun ProfileScreen(onSwitchRole: (UserRole) -> Unit, onLogout: () -> Unit) {
                     style = PillStyle.Outline, leadingIcon = Icons.Outlined.Dashboard, height = 46.dp)
             }
             VSpace(24.dp)
-            PillButton("LOG OUT", onLogout, style = PillStyle.Dark, leadingIcon = Icons.AutoMirrored.Outlined.Logout)
+            PillButton("LOG OUT", onClick = {
+                SessionManager.clearSession(context)
+                onLogout()
+            }, style = PillStyle.Dark, leadingIcon = Icons.AutoMirrored.Outlined.Logout)
         }
+    }
+
+    if (showEditDialog) {
+        var editName by remember(user) { mutableStateOf(user.emergencyName) }
+        var editRelation by remember(user) { mutableStateOf(user.emergencyRelation) }
+        var editPhone by remember(user) { mutableStateOf(user.emergencyPhone) }
+        var isSaving by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { if (!isSaving) showEditDialog = false },
+            title = {
+                Text("Edit emergency contact", style = MaterialTheme.typography.titleLarge, color = Ink)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SoftTextField(
+                        value = editName,
+                        onValueChange = { editName = it },
+                        label = "Contact name",
+                        placeholder = "e.g. Nirmala Perera",
+                        leadingIcon = Icons.Outlined.Person
+                    )
+                    SoftTextField(
+                        value = editRelation,
+                        onValueChange = { editRelation = it },
+                        label = "Relationship",
+                        placeholder = "e.g. Parent / Spouse",
+                        leadingIcon = Icons.Outlined.FamilyRestroom
+                    )
+                    SoftTextField(
+                        value = editPhone,
+                        onValueChange = { editPhone = it },
+                        label = "Phone number",
+                        placeholder = "e.g. +94 71 555 0192",
+                        leadingIcon = Icons.Outlined.Phone,
+                        keyboardType = KeyboardType.Phone
+                    )
+                }
+            },
+            confirmButton = {
+                PillButton(
+                    text = "Save",
+                    onClick = {
+                        val trimmedName = editName.trim()
+                        val trimmedRelation = editRelation.trim()
+                        val trimmedPhone = editPhone.trim()
+
+                        if (trimmedName.isEmpty()) {
+                            android.widget.Toast.makeText(context, "Contact name cannot be empty", android.widget.Toast.LENGTH_SHORT).show()
+                            return@PillButton
+                        }
+                        if (trimmedRelation.isEmpty()) {
+                            android.widget.Toast.makeText(context, "Relationship cannot be empty", android.widget.Toast.LENGTH_SHORT).show()
+                            return@PillButton
+                        }
+                        if (trimmedPhone.isEmpty()) {
+                            android.widget.Toast.makeText(context, "Phone number cannot be empty", android.widget.Toast.LENGTH_SHORT).show()
+                            return@PillButton
+                        }
+
+                        isSaving = true
+                        AuthNetworkManager.updateProfile(
+                            context = context,
+                            fullName = user.name,
+                            phone = user.phone,
+                            emergencyName = trimmedName,
+                            emergencyPhone = trimmedPhone,
+                            emergencyRelation = trimmedRelation
+                        ) { success, updatedProfile, message ->
+                            isSaving = false
+                            if (success && updatedProfile != null) {
+                                loadedPassenger = updatedProfile.toPassenger()
+                                showEditDialog = false
+                                android.widget.Toast.makeText(context, "Emergency contact updated!", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                android.widget.Toast.makeText(context, message ?: "Failed to update emergency contact", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    enabled = !isSaving,
+                    loading = isSaving,
+                    modifier = Modifier.width(110.dp),
+                    height = 42.dp
+                )
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { if (!isSaving) showEditDialog = false },
+                    enabled = !isSaving
+                ) {
+                    Text("Cancel", style = MaterialTheme.typography.labelMedium, color = InkSoft)
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(24.dp)
+        )
     }
 }
