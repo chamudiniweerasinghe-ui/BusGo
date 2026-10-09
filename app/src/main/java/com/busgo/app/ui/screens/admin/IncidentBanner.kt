@@ -38,24 +38,35 @@ import androidx.compose.ui.unit.*
 import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
+import com.busgo.app.ui.components.map.*
 import com.busgo.app.ui.theme.*
 import com.busgo.app.util.*
 import java.time.LocalDate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.busgo.app.ui.components.map.*
 
 @Composable
-fun IncidentBanner(onOpen: () -> Unit, modifier: Modifier = Modifier) {
-    SoftCard(modifier, color = DangerSoft, padding = 16.dp, onClick = onOpen) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Warning, contentDescription = null, tint = Danger)
-            HSpace(12.dp)
-            Column(Modifier.weight(1f)) {
-                Text("1 open incident", style = MaterialTheme.typography.titleMedium, color = Ink)
-                Text("NB-2231 near Alawwa, passengers notified", style = MaterialTheme.typography.bodySmall, color = InkSoft)
+fun IncidentBanner(
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+    incidentsCount: Int = 0,
+    incidentSummary: String = "No open incidents reported"
+) {
+    if (incidentsCount > 0) {
+        SoftCard(modifier, color = DangerSoft, padding = 16.dp, onClick = onOpen) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Warning, contentDescription = null, tint = Danger)
+                HSpace(12.dp)
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (incidentsCount == 1) "1 open incident" else "$incidentsCount open incidents",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Ink
+                    )
+                    Text(incidentSummary, style = MaterialTheme.typography.bodySmall, color = InkSoft)
+                }
+                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = Ink)
             }
-            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = Ink)
         }
     }
 }

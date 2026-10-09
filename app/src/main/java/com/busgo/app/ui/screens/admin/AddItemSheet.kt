@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -35,28 +36,36 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
+import com.busgo.app.data.AdminNetworkManager
 import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
+import com.busgo.app.ui.components.map.*
 import com.busgo.app.ui.theme.*
 import com.busgo.app.util.*
 import java.time.LocalDate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.busgo.app.ui.components.map.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun AddItemSheet(tab: AdminTab, onDismiss: () -> Unit) {
+fun AddItemSheet(
+    tab: AdminTab,
+    onDismiss: () -> Unit,
+    onItemCreated: () -> Unit = {}
+) {
+    val context = LocalContext.current
     var first by remember { mutableStateOf("") }
     var second by remember { mutableStateOf("") }
     var category by remember { mutableStateOf(BusCategory.NORMAL) }
+    var isSaving by remember { mutableStateOf(false) }
+
     val (firstLabel, secondLabel) = when (tab) {
         AdminTab.BUSES -> "Bus number" to "Total seats"
         AdminTab.ROUTES -> "Route name" to "Stops (comma separated)"
         AdminTab.SCHEDULES -> "Departure time" to "Bus number"
         AdminTab.FARES -> "Bus type" to "Rate per km (LKR)"
-        AdminTab.DRIVERS -> "Full name" to "Licence number"
+        AdminTab.DRIVERS -> "Full name" to "Phone number"
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Cream) {
@@ -77,7 +86,31 @@ fun AddItemSheet(tab: AdminTab, onDismiss: () -> Unit) {
                 }
             }
             VSpace(24.dp)
-            PillButton("Save ${tab.singular}", onDismiss, enabled = first.isNotBlank())
+            PillButton(
+                text = "Save ${tab.singular}",
+                onClick = {
+                    if (first.isBlank()) return@PillButton
+                    isSaving = true
+                    AdminNetworkManager.createAdminItem(
+                        context = context,
+                        tab = tab,
+                        first = first,
+                        second = second,
+                        category = category.label
+                    ) { success, _, message ->
+                        isSaving = false
+                        if (success) {
+                            android.widget.Toast.makeText(context, "${tab.singular.replaceFirstChar { it.uppercase() }} created successfully!", android.widget.Toast.LENGTH_SHORT).show()
+                            onItemCreated()
+                            onDismiss()
+                        } else {
+                            android.widget.Toast.makeText(context, message ?: "Failed to create ${tab.singular}", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    }
+                },
+                enabled = first.isNotBlank() && !isSaving,
+                loading = isSaving
+            )
         }
     }
 }
