@@ -51,7 +51,7 @@ fun MyTicketsScreen(tickets: List<Ticket>, onOpen: (Ticket) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var realTickets by remember { mutableStateOf<List<Ticket>>(emptyList()) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(tickets.size) {
         com.busgo.app.data.TicketNetworkManager.getMyTickets(context) { fetched ->
             if (fetched.isNotEmpty()) {
                 realTickets = fetched
@@ -59,8 +59,16 @@ fun MyTicketsScreen(tickets: List<Ticket>, onOpen: (Ticket) -> Unit) {
         }
     }
 
-    val activeList = if (realTickets.isNotEmpty()) realTickets else tickets
-    val shown = activeList.filter {
+    val combinedTickets = remember(realTickets, tickets) {
+        val map = LinkedHashMap<String, Ticket>()
+        // Add backend real tickets
+        realTickets.forEach { map[it.id] = it }
+        // Add local in-memory tickets from payment flow
+        tickets.forEach { map[it.id] = it }
+        map.values.toList()
+    }
+
+    val shown = combinedTickets.filter {
         if (tab == "Upcoming") it.status == TicketStatus.UPCOMING else it.status != TicketStatus.UPCOMING
     }
     Column(Modifier.fillMaxSize().background(Cream)) {
