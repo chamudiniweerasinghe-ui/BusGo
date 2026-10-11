@@ -38,7 +38,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import com.busgo.app.data.AuthNetworkManager
 import com.busgo.app.data.SessionManager
-import com.busgo.app.data.mock.MockData
+// Demo/Mock data references commented out for 100% real database sync
+// import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
 import com.busgo.app.ui.components.map.*
@@ -62,7 +63,14 @@ fun ProfileScreen(onSwitchRole: (UserRole) -> Unit, onLogout: () -> Unit) {
         }
     }
 
-    val user = loadedPassenger ?: MockData.passenger
+    val user = loadedPassenger ?: Passenger(
+        name = "Passenger",
+        email = "passenger@busgo.lk",
+        phone = "+94771234567",
+        emergencyName = "Emergency Contact",
+        emergencyPhone = "+94715550192",
+        emergencyRelation = "Family"
+    )
 
     Column(
         Modifier
@@ -111,7 +119,7 @@ fun ProfileScreen(onSwitchRole: (UserRole) -> Unit, onLogout: () -> Unit) {
                 }
             }
             VSpace(24.dp)
-            SectionTitle("Switch view (for demo)")
+            SectionTitle("Switch account view")
             VSpace(12.dp)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PillButton("Bus", { onSwitchRole(UserRole.DRIVER) }, Modifier.weight(1f),

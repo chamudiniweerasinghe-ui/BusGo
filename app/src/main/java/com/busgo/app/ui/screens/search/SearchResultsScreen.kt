@@ -35,7 +35,8 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
-import com.busgo.app.data.mock.MockData
+// Demo/Mock data references commented out for 100% real database sync
+// import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
 import com.busgo.app.ui.theme.*
@@ -63,16 +64,14 @@ fun SearchResultsScreen(
             destination = draft.to,
             category = draft.category?.label
         ) { results ->
-            busesList = if (results.isNotEmpty()) results else MockData.buses.filter {
-                draft.category == null || it.category == draft.category
-            }
+            // Real PostgreSQL search results
+            busesList = results
             isLoading = false
         }
     }
 
     val buses = remember(busesList, draft.category, sort) {
-        val currentList = if (busesList.isNotEmpty()) busesList else MockData.buses
-        val filtered = currentList.filter { draft.category == null || it.category == draft.category }
+        val filtered = busesList.filter { draft.category == null || it.category == draft.category }
         when (sort) {
             "Cheapest" -> filtered.sortedBy { it.ratePerKm }
             "Most seats" -> filtered.sortedByDescending { it.seatsLeft }
@@ -119,12 +118,20 @@ fun SearchResultsScreen(
                     }
                 }
             }
-            items(buses, key = { it.id }) { bus ->
-                BusCard(bus, onTrack = { onTrack(bus) }, onBook = { onBook(bus) })
-            }
-            if (buses.isEmpty()) {
+            if (isLoading) {
                 item {
-                    EmptyState(Icons.Outlined.DirectionsBus, "No buses match these filters", "Try another bus type or a different date.")
+                    Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Orange)
+                    }
+                }
+            } else {
+                items(buses, key = { it.id }) { bus ->
+                    BusCard(bus, onTrack = { onTrack(bus) }, onBook = { onBook(bus) })
+                }
+                if (buses.isEmpty()) {
+                    item {
+                        EmptyState(Icons.Outlined.DirectionsBus, "No buses match these filters", "Try searching for a different route or bus type.")
+                    }
                 }
             }
         }

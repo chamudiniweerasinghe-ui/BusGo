@@ -46,7 +46,11 @@ import kotlinx.coroutines.launch
 import com.busgo.app.ui.components.map.*
 
 @Composable
-fun AdminListRow(item: AdminItem, icon: ImageVector) {
+fun AdminListRow(
+    item: AdminItem,
+    icon: ImageVector,
+    onDelete: (AdminItem) -> Unit = {}
+) {
     SoftCard(padding = 16.dp, onClick = { }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -62,9 +66,18 @@ fun AdminListRow(item: AdminItem, icon: ImageVector) {
             }
             TagChip(
                 item.status,
-                container = if (item.healthy) Success.copy(alpha = 0.12f) else Coral.copy(alpha = 0.15f),
-                content = if (item.healthy) Success else Coral
+                container = if (item.healthy) Success.copy(alpha = 0.12f) else Danger.copy(alpha = 0.15f),
+                content = if (item.healthy) Success else Danger
             )
+            HSpace(8.dp)
+            IconButton(onClick = { onDelete(item) }, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    imageVector = Icons.Outlined.Delete,
+                    contentDescription = "Delete item",
+                    tint = Danger,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 }

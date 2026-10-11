@@ -35,7 +35,8 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
-import com.busgo.app.data.mock.MockData
+// Demo/Mock data references commented out for 100% real database sync
+// import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
 import com.busgo.app.ui.theme.*
@@ -63,12 +64,13 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) {
         com.busgo.app.data.BusNetworkManager.getAllBuses { fetched ->
-            busesList = if (fetched.isNotEmpty()) fetched else MockData.buses
+            // Connected to real PostgreSQL database
+            busesList = fetched
             isLoading = false
         }
     }
 
-    val liveBuses = (if (busesList.isNotEmpty()) busesList else MockData.buses).filter { it.speedKmh > 0 || it.etaMinutes > 0 }
+    val liveBuses = busesList.filter { it.speedKmh > 0 || it.etaMinutes > 0 }
 
     Column(
         Modifier
@@ -139,13 +141,24 @@ fun HomeScreen(
                 Text("${liveBuses.size} buses", style = MaterialTheme.typography.bodySmall, color = Muted)
             }
             VSpace(14.dp)
-            liveBuses.forEach { bus ->
-                LiveBusRow(bus) { onTrackBus(bus) }
-                VSpace(12.dp)
+            if (isLoading) {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally).padding(20.dp), color = Orange)
+            } else if (liveBuses.isEmpty()) {
+                Text(
+                    "No buses currently active near your location.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Muted,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+            } else {
+                liveBuses.forEach { bus ->
+                    LiveBusRow(bus) { onTrackBus(bus) }
+                    VSpace(12.dp)
+                }
             }
         }
 
-        // peach section, like the reference "Guardian Profile" block
+        // peach section
         Column(
             Modifier
                 .padding(top = 12.dp)

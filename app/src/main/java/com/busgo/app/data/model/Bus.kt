@@ -20,7 +20,8 @@ data class Bus(
     val etaMinutes: Int,
     val nextStop: String,
     val speedKmh: Int,
-    val amenities: List<String> = emptyList()
+    val amenities: List<String> = emptyList(),
+    val isOnline: Boolean = false
 ) {
     /** Fare for the whole route, rounded up to the nearest 10 rupees. */
     val fullFare: Double get() = ceil(ratePerKm * routeKm / 10.0) * 10.0

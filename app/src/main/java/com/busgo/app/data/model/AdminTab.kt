@@ -12,5 +12,6 @@ data class AdminItem(
     val title: String,
     val subtitle: String,
     val status: String,
-    val healthy: Boolean = true
+    val healthy: Boolean = true,
+    val id: String = ""
 )

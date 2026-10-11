@@ -57,6 +57,8 @@ fun SoftTextField(
     singleLine: Boolean = true
 ) {
     val shape = RoundedCornerShape(18.dp)
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+
     Column(modifier.fillMaxWidth()) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = Muted)
         VSpace(6.dp)
@@ -66,8 +68,8 @@ fun SoftTextField(
                 .clip(shape)
                 .background(Color.White.copy(alpha = 0.75f))
                 .border(1.dp, Hairline, shape)
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = if (singleLine) Alignment.CenterVertically else Alignment.Top
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             if (leadingIcon != null) {
                 Icon(leadingIcon, contentDescription = null, modifier = Modifier.size(20.dp), tint = Muted)
@@ -84,12 +86,26 @@ fun SoftTextField(
                     minLines = if (singleLine) 1 else 3,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = Ink),
                     keyboardOptions = KeyboardOptions(
-                        keyboardType = if (isPassword) KeyboardType.Password else keyboardType
+                        keyboardType = if (isPassword && !passwordVisible) KeyboardType.Password else keyboardType
                     ),
-                    visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
+                    visualTransformation = if (isPassword && !passwordVisible) PasswordVisualTransformation() else VisualTransformation.None,
                     cursorBrush = SolidColor(Rose),
                     modifier = Modifier.fillMaxWidth()
                 )
+            }
+            if (isPassword) {
+                HSpace(8.dp)
+                IconButton(
+                    onClick = { passwordVisible = !passwordVisible },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = if (passwordVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
+                        contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                        tint = Muted,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
     }

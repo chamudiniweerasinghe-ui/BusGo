@@ -1,5 +1,6 @@
 package com.busgo.app.ui.screens.admin
 
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -47,18 +48,22 @@ import java.time.LocalDate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** Operator / admin view: fleet stats, incidents and CRUD lists. */
+/** Operator / admin view: fleet stats, incidents, CRUD lists, and Danger Zone. */
 @Composable
 fun AdminDashboardScreen(onOpenIncident: () -> Unit, onLogout: () -> Unit) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(AdminTab.BUSES) }
     var showAdd by remember { mutableStateOf(false) }
+    var itemToDelete by remember { mutableStateOf<AdminItem?>(null) }
+    var showResetDialog by remember { mutableStateOf(false) }
     var refreshTrigger by remember { mutableIntStateOf(0) }
 
     var stats by remember { mutableStateOf<AdminStats?>(null) }
     var itemsList by remember { mutableStateOf<List<AdminItem>>(emptyList()) }
     var openIncidents by remember { mutableStateOf<List<AdminIncident>>(emptyList()) }
     var isLoadingItems by remember { mutableStateOf(true) }
+    var isDeleting by remember { mutableStateOf(false) }
+    var isResetting by remember { mutableStateOf(false) }
 
     // Load live stats & incidents from backend
     LaunchedEffect(refreshTrigger) {
@@ -139,8 +144,39 @@ fun AdminDashboardScreen(onOpenIncident: () -> Unit, onLogout: () -> Unit) {
                     }
                 }
             }
-            items(displayedItems) {
-                Box(Modifier.padding(horizontal = 20.dp)) { AdminListRow(it, icon) }
+            items(displayedItems) { item ->
+                Box(Modifier.padding(horizontal = 20.dp)) {
+                    AdminListRow(
+                        item = item,
+                        icon = icon,
+                        onDelete = { itemToDelete = it }
+                    )
+                }
+            }
+            item {
+                VSpace(20.dp)
+                Column(Modifier.padding(horizontal = 20.dp)) {
+                    SectionTitle("Danger Zone")
+                    VSpace(10.dp)
+                    SoftCard(color = DangerSoft, padding = 16.dp) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Outlined.Warning, contentDescription = null, tint = Danger, modifier = Modifier.size(24.dp))
+                                HSpace(10.dp)
+                                Column(Modifier.weight(1f)) {
+                                    Text("Reset Database Test Data", style = MaterialTheme.typography.titleMedium, color = Ink)
+                                    Text("Clear GPS locations, open incidents, and reset seat holds in PostgreSQL.", style = MaterialTheme.typography.bodySmall, color = InkSoft)
+                                }
+                            }
+                            PillButton(
+                                text = "RESET DATABASE TEST DATA",
+                                onClick = { showResetDialog = true },
+                                style = PillStyle.Danger,
+                                height = 40.dp
+                            )
+                        }
+                    }
+                }
             }
         }
         PillButton(
@@ -159,5 +195,83 @@ fun AdminDashboardScreen(onOpenIncident: () -> Unit, onLogout: () -> Unit) {
                 onItemCreated = { refreshTrigger++ }
             )
         }
+    }
+
+    // Delete Confirmation Dialog
+    itemToDelete?.let { item ->
+        AlertDialog(
+            onDismissRequest = { if (!isDeleting) itemToDelete = null },
+            title = { Text("Delete ${tab.singular}?", style = MaterialTheme.typography.titleLarge, color = Ink) },
+            text = { Text("Are you sure you want to delete '${item.title}'? This action is permanent.", style = MaterialTheme.typography.bodyMedium, color = InkSoft) },
+            confirmButton = {
+                PillButton(
+                    text = "Delete",
+                    onClick = {
+                        isDeleting = true
+                        AdminNetworkManager.deleteAdminItem(context, item.id, tab) { success, message ->
+                            isDeleting = false
+                            itemToDelete = null
+                            if (success) {
+                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                refreshTrigger++
+                            } else {
+                                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    loading = isDeleting,
+                    enabled = !isDeleting,
+                    style = PillStyle.Danger,
+                    height = 42.dp,
+                    modifier = Modifier.width(100.dp)
+                )
+            },
+            dismissButton = {
+                TextButton(onClick = { if (!isDeleting) itemToDelete = null }, enabled = !isDeleting) {
+                    Text("Cancel", color = Muted)
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
+
+    // Danger Zone Reset Confirmation Dialog
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!isResetting) showResetDialog = false },
+            title = { Text("Confirm Database Reset", style = MaterialTheme.typography.titleLarge, color = Danger) },
+            text = { Text("This will clear all test GPS locations, open incidents, and reset all bus seat states in PostgreSQL. Continue?", style = MaterialTheme.typography.bodyMedium, color = InkSoft) },
+            confirmButton = {
+                PillButton(
+                    text = "Confirm Reset",
+                    onClick = {
+                        isResetting = true
+                        AdminNetworkManager.resetDatabase(context) { success, message ->
+                            isResetting = false
+                            showResetDialog = false
+                            if (success) {
+                                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                                refreshTrigger++
+                            } else {
+                                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    loading = isResetting,
+                    enabled = !isResetting,
+                    style = PillStyle.Danger,
+                    height = 42.dp,
+                    modifier = Modifier.width(140.dp)
+                )
+            },
+            dismissButton = {
+                TextButton(onClick = { if (!isResetting) showResetDialog = false }, enabled = !isResetting) {
+                    Text("Cancel", color = Muted)
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(24.dp)
+        )
     }
 }

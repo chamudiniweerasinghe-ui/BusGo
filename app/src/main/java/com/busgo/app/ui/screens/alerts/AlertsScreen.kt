@@ -35,7 +35,8 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
-import com.busgo.app.data.mock.MockData
+// Demo/Mock data references commented out for 100% real database sync
+// import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
 import com.busgo.app.ui.theme.*
@@ -49,16 +50,16 @@ import com.busgo.app.ui.components.map.*
 fun AlertsScreen(alerts: List<AlertItem>, onViewOnMap: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var realAlerts by remember { mutableStateOf<List<AlertItem>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
         com.busgo.app.data.AlertNetworkManager.getAlerts(context) { fetched ->
-            if (fetched.isNotEmpty()) {
-                realAlerts = fetched
-            }
+            realAlerts = fetched
+            isLoading = false
         }
     }
 
-    val displayAlerts = if (realAlerts.isNotEmpty()) realAlerts else alerts
+    val displayAlerts = realAlerts
 
     Column(Modifier.fillMaxSize().background(Cream)) {
         NavyHeader(title = "Alerts", leading = { GridLogo() }, actions = { LiveBadge(onDark = true) }) {
@@ -74,8 +75,20 @@ fun AlertsScreen(alerts: List<AlertItem>, onViewOnMap: () -> Unit) {
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(displayAlerts, key = { it.id }) { a ->
-                if (a.type == AlertType.EMERGENCY) EmergencyAlertCard(a, onViewOnMap) else AlertRow(a)
+            if (isLoading) {
+                item {
+                    Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Orange)
+                    }
+                }
+            } else if (displayAlerts.isEmpty()) {
+                item {
+                    EmptyState(Icons.Outlined.NotificationsNone, "No active alerts", "System notifications and route alerts will appear here.")
+                }
+            } else {
+                items(displayAlerts, key = { it.id }) { a ->
+                    if (a.type == AlertType.EMERGENCY) EmergencyAlertCard(a, onViewOnMap) else AlertRow(a)
+                }
             }
         }
     }

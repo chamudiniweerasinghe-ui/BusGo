@@ -69,7 +69,7 @@ fun LiveTrackingScreen(bus: Bus, onBack: () -> Unit, onBook: () -> Unit) {
         }
     }
 
-    // Poll backend every 5 seconds for real driver GPS location
+    // Poll backend every 3 seconds for real driver GPS location
     LaunchedEffect(numericBusId) {
         while (isActive) {
             DriverNetworkManager.getBusLocation(context, busId = numericBusId) { success, location, _ ->
@@ -78,7 +78,7 @@ fun LiveTrackingScreen(bus: Bus, onBack: () -> Unit, onBook: () -> Unit) {
                     secondsAgo = 1
                 }
             }
-            delay(5000L)
+            delay(3000L)
         }
     }
 
@@ -90,8 +90,8 @@ fun LiveTrackingScreen(bus: Bus, onBack: () -> Unit, onBook: () -> Unit) {
         }
     }
 
-    // Calculate map progress from real GPS coordinates or fallback to bus progress
-    val routeProgress: Float = remember(busLocation) {
+    // Calculate map progress from real GPS coordinates or fallback to default
+    val targetProgress: Float = remember(busLocation) {
         val loc = busLocation
         if (loc != null && loc.latitude != 0.0) {
             // Map Kurunegala (lat ~7.28) to Colombo Fort (lat ~6.93)
@@ -104,12 +104,23 @@ fun LiveTrackingScreen(bus: Bus, onBack: () -> Unit, onBook: () -> Unit) {
         }
     }
 
-    val updatedBus = remember(bus, busLocation) {
+    // Smoothly animate the bus icon moving on the map canvas
+    val animatedProgress by animateFloatAsState(
+        targetValue = targetProgress,
+        animationSpec = tween(durationMillis = 2000, easing = LinearEasing),
+        label = "live-bus-movement"
+    )
+
+    val updatedBus = remember(bus, busLocation, animatedProgress) {
         val loc = busLocation
+        val eta = ((1.0f - animatedProgress) * 120).toInt().coerceAtLeast(1)
         if (loc != null) {
-            bus.copy(speedKmh = loc.speed.toInt())
+            bus.copy(
+                speedKmh = loc.speed.toInt(),
+                etaMinutes = eta
+            )
         } else {
-            bus
+            bus.copy(etaMinutes = eta)
         }
     }
 
@@ -138,7 +149,7 @@ fun LiveTrackingScreen(bus: Bus, onBack: () -> Unit, onBook: () -> Unit) {
             val mapHeight = maxHeight * 0.46f
             Box(Modifier.fillMaxWidth().height(mapHeight)) {
                 RouteMapCanvas(
-                    progress = routeProgress,
+                    progress = animatedProgress,
                     stopNames = routeStops.map { it.name },
                     userStopIndex = 4,
                     modifier = Modifier.fillMaxSize()

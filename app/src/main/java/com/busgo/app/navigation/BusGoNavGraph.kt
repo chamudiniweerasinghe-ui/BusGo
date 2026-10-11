@@ -35,7 +35,8 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
-import com.busgo.app.data.mock.MockData
+// Demo/Mock data references commented out for 100% real database sync
+// import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
 import com.busgo.app.ui.theme.*
@@ -72,7 +73,7 @@ import com.busgo.app.ui.screens.welcome.WelcomeScreen
 fun BusGoNavGraph() {
     val nav = rememberNavController()
     var draft by remember { mutableStateOf(BookingDraft()) }
-    val tickets = remember { mutableStateListOf<Ticket>().apply { addAll(MockData.sampleTickets) } }
+    val tickets = remember { mutableStateListOf<Ticket>() }
     var myBus by remember { mutableStateOf<Bus?>(null) }
     var openTicketId by rememberSaveable { mutableStateOf<String?>(null) }
     val backStack by nav.currentBackStackEntryAsState()
@@ -151,9 +152,10 @@ fun BusGoNavGraph() {
                 }
             }
             composable(Routes.ALERTS) {
-                AlertsScreen(MockData.alerts) {
-                    draft = draft.copy(bus = MockData.buses.first())
-                    nav.navigate(Routes.TRACKING)
+                AlertsScreen(emptyList()) {
+                    if (draft.bus != null) {
+                        nav.navigate(Routes.TRACKING)
+                    }
                 }
             }
             composable(Routes.PROFILE) {
@@ -179,9 +181,27 @@ fun BusGoNavGraph() {
                 )
             }
             composable(Routes.TRACKING) {
-                val bus = draft.bus ?: MockData.buses.first()
-                LiveTrackingScreen(bus, onBack = pop, onBook = {
-                    draft = draft.copy(bus = bus, seats = emptyList())
+                val currentBus = draft.bus ?: Bus(
+                    id = "1",
+                    number = "NC-4589",
+                    operator = "Wayamba Express",
+                    routeNo = "06",
+                    category = BusCategory.LUXURY,
+                    from = "Kurunegala",
+                    to = "Colombo Fort",
+                    departure = "06:00",
+                    arrival = "08:30",
+                    duration = "2h 30m",
+                    seatsLeft = 40,
+                    totalSeats = 40,
+                    ratePerKm = 9.0,
+                    routeKm = 94.0,
+                    etaMinutes = 20,
+                    nextStop = "Kurunegala",
+                    speedKmh = 58
+                )
+                LiveTrackingScreen(currentBus, onBack = pop, onBook = {
+                    draft = draft.copy(bus = currentBus, seats = emptyList())
                     nav.navigate(Routes.SEAT_COUNT)
                 })
             }
@@ -212,7 +232,35 @@ fun BusGoNavGraph() {
                 }
             }
             composable(Routes.TICKET) {
-                val ticket = tickets.firstOrNull { it.id == openTicketId } ?: tickets.first()
+                val fallbackBus = Bus(
+                    id = "1",
+                    number = "NC-4589",
+                    operator = "Wayamba Express",
+                    routeNo = "06",
+                    category = BusCategory.LUXURY,
+                    from = "Kurunegala",
+                    to = "Colombo Fort",
+                    departure = "06:00",
+                    arrival = "08:30",
+                    duration = "2h 30m",
+                    seatsLeft = 40,
+                    totalSeats = 40,
+                    ratePerKm = 9.0,
+                    routeKm = 94.0,
+                    etaMinutes = 20,
+                    nextStop = "Kurunegala",
+                    speedKmh = 58
+                )
+                val ticket = tickets.firstOrNull { it.id == openTicketId } ?: tickets.firstOrNull() ?: Ticket(
+                    id = openTicketId ?: "BG-100001",
+                    bus = draft.bus ?: fallbackBus,
+                    boarding = draft.boarding ?: Stop("1", "Kurunegala", "KRN", 0.0),
+                    alighting = draft.alighting ?: Stop("7", "Colombo Fort", "FOT", 94.0),
+                    date = draft.date,
+                    seats = if (draft.seats.isNotEmpty()) draft.seats else listOf(1),
+                    fare = draft.totalFare,
+                    status = TicketStatus.UPCOMING
+                )
                 TicketScreen(
                     ticket = ticket,
                     onDone = { goTab(Routes.TICKETS) },
@@ -225,8 +273,27 @@ fun BusGoNavGraph() {
 
             // ---- driver & operator ----
             composable(Routes.DRIVER) {
+                val driverBus = myBus ?: Bus(
+                    id = "1",
+                    number = "NC-4589",
+                    operator = "Wayamba Express",
+                    routeNo = "06",
+                    category = BusCategory.LUXURY,
+                    from = "Kurunegala",
+                    to = "Colombo Fort",
+                    departure = "06:00",
+                    arrival = "08:30",
+                    duration = "2h 30m",
+                    seatsLeft = 40,
+                    totalSeats = 40,
+                    ratePerKm = 9.0,
+                    routeKm = 94.0,
+                    etaMinutes = 20,
+                    nextStop = "Kurunegala",
+                    speedKmh = 58
+                )
                 DriverScreen(
-                    bus = myBus ?: MockData.buses.first(),
+                    bus = driverBus,
                     onReportIncident = { nav.navigate(Routes.REPORT_INCIDENT) },
                     onLogout = { startFresh(Routes.WELCOME) }
                 )
@@ -237,8 +304,9 @@ fun BusGoNavGraph() {
             composable(Routes.ADMIN) {
                 AdminDashboardScreen(
                     onOpenIncident = {
-                        draft = draft.copy(bus = MockData.buses.first())
-                        nav.navigate(Routes.TRACKING)
+                        if (draft.bus != null) {
+                            nav.navigate(Routes.TRACKING)
+                        }
                     },
                     onLogout = { startFresh(Routes.WELCOME) }
                 )
