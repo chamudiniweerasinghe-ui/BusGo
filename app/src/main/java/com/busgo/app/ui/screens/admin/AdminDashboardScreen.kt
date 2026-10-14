@@ -38,7 +38,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import com.busgo.app.data.AdminNetworkManager
-import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
 import com.busgo.app.ui.components.map.*
@@ -98,7 +97,7 @@ fun AdminDashboardScreen(onOpenIncident: () -> Unit, onLogout: () -> Unit) {
         AdminTab.DRIVERS -> Icons.Outlined.AccountCircle
     }
 
-    val displayedItems = if (itemsList.isNotEmpty()) itemsList else MockData.adminItems(tab)
+    val displayedItems = itemsList
 
     Box(Modifier.fillMaxSize().background(Cream)) {
         LazyColumn(
@@ -189,11 +188,21 @@ fun AdminDashboardScreen(onOpenIncident: () -> Unit, onLogout: () -> Unit) {
             leadingIcon = Icons.Outlined.Add
         )
         if (showAdd) {
-            AddItemSheet(
-                tab = tab,
-                onDismiss = { showAdd = false },
-                onItemCreated = { refreshTrigger++ }
-            )
+            if (tab == AdminTab.BUSES) {
+                com.busgo.app.ui.screens.driver.AddNewBusDialog(
+                    onBusCreated = {
+                        refreshTrigger++
+                        showAdd = false
+                    },
+                    onDismiss = { showAdd = false }
+                )
+            } else {
+                AddItemSheet(
+                    tab = tab,
+                    onDismiss = { showAdd = false },
+                    onItemCreated = { refreshTrigger++ }
+                )
+            }
         }
     }
 

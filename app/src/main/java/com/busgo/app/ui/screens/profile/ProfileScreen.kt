@@ -64,12 +64,12 @@ fun ProfileScreen(onSwitchRole: (UserRole) -> Unit, onLogout: () -> Unit) {
     }
 
     val user = loadedPassenger ?: Passenger(
-        name = "Passenger",
-        email = "passenger@busgo.lk",
-        phone = "+94771234567",
-        emergencyName = "Emergency Contact",
-        emergencyPhone = "+94715550192",
-        emergencyRelation = "Family"
+        name = "Loading...",
+        email = "",
+        phone = "",
+        emergencyName = "",
+        emergencyPhone = "",
+        emergencyRelation = ""
     )
 
     Column(

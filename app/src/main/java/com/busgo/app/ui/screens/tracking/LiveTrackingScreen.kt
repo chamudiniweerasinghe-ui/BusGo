@@ -38,7 +38,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import com.busgo.app.data.BusNetworkManager
 import com.busgo.app.data.DriverNetworkManager
-import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
 import com.busgo.app.ui.components.map.*
@@ -52,7 +51,10 @@ import kotlinx.coroutines.launch
 @Composable
 fun LiveTrackingScreen(bus: Bus, onBack: () -> Unit, onBook: () -> Unit) {
     val context = LocalContext.current
-    var routeStops by remember { mutableStateOf<List<Stop>>(MockData.routeStops) }
+    val fallbackStops = remember(bus.from, bus.to) {
+        listOf(Stop("s1", bus.from, "ORG", 0.0), Stop("s2", bus.to, "DST", 94.0))
+    }
+    var routeStops by remember { mutableStateOf<List<Stop>>(fallbackStops) }
     var busLocation by remember { mutableStateOf<BusLocation?>(null) }
     var secondsAgo by remember { mutableIntStateOf(1) }
 
@@ -167,10 +169,13 @@ fun LiveTrackingScreen(bus: Bus, onBack: () -> Unit, onBook: () -> Unit) {
                 }
             }
             TrackingSheet(
-                updatedBus, secondsAgo, onBook,
-                Modifier
+                bus = updatedBus,
+                secondsAgo = secondsAgo,
+                onBook = onBook,
+                modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .height(maxHeight * 0.58f)
+                    .height(maxHeight * 0.58f),
+                routeStops = routeStops
             )
         }
     }

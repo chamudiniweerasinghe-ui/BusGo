@@ -35,7 +35,6 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
-import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
 import com.busgo.app.ui.theme.*
@@ -51,14 +50,15 @@ fun TrackingSheet(
     bus: Bus,
     secondsAgo: Int,
     onBook: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    routeStops: List<Stop> = emptyList()
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val tabs = listOf("Status", "History", "Bus info")
-    val stops = MockData.routeStops
-    val currentIndex = 2
-    val userIndex = 4
-    val times = remember(bus.id) { stopTimes(bus, stops) }
+    val stops = if (routeStops.isNotEmpty()) routeStops else listOf(Stop("s1", bus.from, "ORG", 0.0), Stop("s2", bus.to, "DST", 94.0))
+    val currentIndex = 0
+    val userIndex = (stops.size - 1).coerceAtLeast(0)
+    val times = remember(bus.id, stops) { stopTimes(bus, stops) }
 
     Surface(
         modifier = modifier.fillMaxWidth(),

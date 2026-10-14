@@ -1,8 +1,8 @@
-# BusGo – Android UI (Kotlin + Jetpack Compose)
+# BusGo – Android App & Node.js Backend
 
-UI-only build of the Online Bus Tracking and Booking System. Every screen runs on
-mock data (`data/mock/MockData.kt`), so you can click through the whole app
-without a backend, map key or Stripe key.
+Production-ready Online Bus Tracking and Booking System with real-time PostgreSQL database sync.
+All demo and hardcoded mock data have been removed. Every screen fetches live data directly
+from the Node.js REST API backend.
 
 ## Run it
 1. Unzip, then in Android Studio choose **File > Open** and pick this `BusGo` folder.

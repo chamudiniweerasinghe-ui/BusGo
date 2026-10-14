@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Looper
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -43,8 +44,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import androidx.core.content.ContextCompat
+import com.busgo.app.data.BusNetworkManager
 import com.busgo.app.data.DriverNetworkManager
-import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
 import com.busgo.app.ui.components.map.*
@@ -62,13 +63,32 @@ import kotlinx.coroutines.launch
 
 /** Bus account home: share GPS, verify tickets and report incidents. */
 @Composable
-fun DriverScreen(bus: Bus, onReportIncident: () -> Unit, onLogout: () -> Unit) {
+fun DriverScreen(
+    bus: Bus,
+    onReportIncident: () -> Unit,
+    onLogout: () -> Unit,
+    onBusUpdated: (Bus) -> Unit = {}
+) {
+    var activeBus by remember(bus) { mutableStateOf(bus) }
     var sharing by rememberSaveable { mutableStateOf(true) }
     var showScan by remember { mutableStateOf(false) }
+    var showPassengers by remember { mutableStateOf(false) }
+    var showAddBus by remember { mutableStateOf(false) }
     var boarded by rememberSaveable { mutableIntStateOf(0) }
+    var registeredBuses by remember { mutableStateOf<List<Bus>>(emptyList()) }
+    var isLoadingBuses by remember { mutableStateOf(true) }
 
     val context = LocalContext.current
     val fusedLocationClient: FusedLocationProviderClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+
+    // Fetch registered buses from PostgreSQL database
+    LaunchedEffect(activeBus.id) {
+        isLoadingBuses = true
+        BusNetworkManager.getAllBuses { fetched ->
+            registeredBuses = fetched
+            isLoadingBuses = false
+        }
+    }
 
     var hasLocationPermission by remember {
         mutableStateOf(
@@ -103,12 +123,12 @@ fun DriverScreen(bus: Bus, onReportIncident: () -> Unit, onLogout: () -> Unit) {
     }
 
     // Lifecycle-safe periodic GPS updates (Target: 5s interval)
-    DisposableEffect(sharing, hasLocationPermission, bus.id) {
+    DisposableEffect(sharing, hasLocationPermission, activeBus.id) {
         if (!sharing || !hasLocationPermission) {
             return@DisposableEffect onDispose {}
         }
 
-        val numericBusId = bus.id.replace("\\D".toRegex(), "").toIntOrNull() ?: 1
+        val numericBusId = activeBus.id.replace("\\D".toRegex(), "").toIntOrNull() ?: 1
 
         val locationRequest = LocationRequest.Builder(
             Priority.PRIORITY_HIGH_ACCURACY,
@@ -146,81 +166,582 @@ fun DriverScreen(bus: Bus, onReportIncident: () -> Unit, onLogout: () -> Unit) {
         }
     }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(Cream)
-            .verticalScroll(rememberScrollState())
-    ) {
-        NavyHeader(
-            title = "My bus",
-            leading = { GridLogo() },
-            actions = {
-                AnimatedBell({ })
-                HeaderIconButton(Icons.AutoMirrored.Outlined.Logout, "Log out", onLogout)
-            }
+    Box(Modifier.fillMaxSize().background(Cream)) {
+        // Main scrollable view
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 120.dp)
         ) {
-            VSpace(20.dp)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                BusAvatar(size = 60.dp, container = Orange, showLive = sharing)
-                HSpace(16.dp)
-                Column(Modifier.weight(1f)) {
-                    Text(bus.number, style = MaterialTheme.typography.headlineLarge, color = Color.White)
-                    Text(
-                        if (bus.routeNo.isBlank()) "${bus.category.label} bus" else "Route ${bus.routeNo}, ${bus.category.label} bus",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.7f)
+            NavyHeader(
+                title = "My bus",
+                leading = { GridLogo() },
+                actions = {
+                    AnimatedBell(onReportIncident)
+                    HeaderIconButton(Icons.AutoMirrored.Outlined.Logout, "Log out", onLogout)
+                }
+            ) {
+                VSpace(20.dp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BusAvatar(size = 60.dp, container = Orange, showLive = sharing)
+                    HSpace(16.dp)
+                    Column(Modifier.weight(1f)) {
+                        Text(activeBus.number.ifBlank { "My Bus" }, style = MaterialTheme.typography.headlineLarge, color = Color.White)
+                        Text(
+                            if (activeBus.routeNo.isBlank()) "${activeBus.category.label} bus" else "Route ${activeBus.routeNo}, ${activeBus.category.label} bus",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+                VSpace(18.dp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("From", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f))
+                        Text(activeBus.from.ifBlank { "Origin" }, style = MaterialTheme.typography.titleMedium, color = Color.White)
+                    }
+                    AnimatedRouteLine(
+                        Modifier.width(90.dp).padding(horizontal = 8.dp),
+                        lineColor = Color.White.copy(alpha = 0.4f),
+                        endpointColor = Color.White,
+                        busTint = Color.White,
+                        iconBackground = Orange
                     )
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                        Text("To", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f))
+                        Text(activeBus.to.ifBlank { "Destination" }, style = MaterialTheme.typography.titleMedium, color = Color.White)
+                    }
                 }
             }
-            VSpace(18.dp)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("From", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f))
-                    Text(bus.from, style = MaterialTheme.typography.titleMedium, color = Color.White)
+
+            Column(Modifier.padding(horizontal = 20.dp).padding(top = 20.dp, bottom = 20.dp)) {
+                GpsShareCard(sharing) { sharing = it }
+                VSpace(12.dp)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    StatTile(Icons.Outlined.People, "$boarded/${activeBus.totalSeats}", "On board", Modifier.weight(1f))
+                    StatTile(Icons.Outlined.Schedule, activeBus.departure, "First trip", Modifier.weight(1f))
+                    StatTile(Icons.Outlined.Speed, "${activeBus.speedKmh} km/h", "Speed", Modifier.weight(1f))
                 }
-                AnimatedRouteLine(
-                    Modifier.width(90.dp).padding(horizontal = 8.dp),
-                    lineColor = Color.White.copy(alpha = 0.4f),
-                    endpointColor = Color.White,
-                    busTint = Color.White,
-                    iconBackground = Orange
-                )
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
-                    Text("To", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f))
-                    Text(bus.to, style = MaterialTheme.typography.titleMedium, color = Color.White)
+
+                VSpace(24.dp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SectionTitle("Registered Fleet Buses", Modifier.weight(1f))
+                    Text("${registeredBuses.size} buses", style = MaterialTheme.typography.bodySmall, color = Muted)
+                }
+                VSpace(12.dp)
+
+                if (isLoadingBuses) {
+                    Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Orange)
+                    }
+                } else if (registeredBuses.isEmpty()) {
+                    SoftCard(padding = 16.dp) {
+                        Text(
+                            "No registered buses in database. Use Admin panel 'ADD BUS' to register new buses.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Muted,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                } else {
+                    registeredBuses.forEach { regBus ->
+                        val isCurrent = regBus.id == activeBus.id || regBus.number == activeBus.number
+                        SoftCard(
+                            onClick = {
+                                activeBus = regBus
+                                onBusUpdated(regBus)
+                            },
+                            color = if (isCurrent) OrangeSoft.copy(alpha = 0.5f) else Color.White,
+                            padding = 16.dp,
+                            modifier = Modifier.padding(bottom = 10.dp)
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    BusAvatar(size = 40.dp, container = if (isCurrent) Orange else Navy)
+                                    HSpace(12.dp)
+                                    Column(Modifier.weight(1f)) {
+                                        Text(regBus.number, style = MaterialTheme.typography.titleMedium, color = Ink)
+                                        Text("${regBus.operator} • Route ${regBus.routeNo}", style = MaterialTheme.typography.bodySmall, color = Muted)
+                                    }
+                                    TagChip(
+                                        text = if (isCurrent) "OPERATING" else regBus.category.label,
+                                        container = if (isCurrent) Orange else CreamDeep,
+                                        content = if (isCurrent) Color.White else Ink
+                                    )
+                                }
+                                HairlineDivider()
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(regBus.from, style = MaterialTheme.typography.bodySmall, color = Ink, fontWeight = FontWeight.Bold)
+                                    HSpace(6.dp)
+                                    Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, tint = Muted, modifier = Modifier.size(14.dp))
+                                    HSpace(6.dp)
+                                    Text(regBus.to, style = MaterialTheme.typography.bodySmall, color = Ink, fontWeight = FontWeight.Bold)
+                                    Spacer(Modifier.weight(1f))
+                                    Text("LKR ${Math.round(regBus.ratePerKm * regBus.routeKm)}", style = MaterialTheme.typography.titleMedium, color = OrangeDeep)
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        Column(Modifier.padding(horizontal = 20.dp).padding(top = 20.dp, bottom = 32.dp)) {
-            GpsShareCard(sharing) { sharing = it }
-            VSpace(12.dp)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatTile(Icons.Outlined.People, "$boarded/${bus.totalSeats}", "On board", Modifier.weight(1f))
-                StatTile(Icons.Outlined.Schedule, bus.departure, "First trip", Modifier.weight(1f))
-                StatTile(Icons.Outlined.Speed, "${bus.speedKmh} km/h", "Speed", Modifier.weight(1f))
-            }
-            VSpace(12.dp)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                ActionTile(Icons.Outlined.QrCodeScanner, "Scan ticket", "Check a passenger's QR", Modifier.weight(1f)) {
-                    showScan = true
+        // Fixed Position Bell Pop-Up Button on Left Side ("Report an incident")
+        Surface(
+            onClick = onReportIncident,
+            shape = CircleShape,
+            color = Danger,
+            shadowElevation = 10.dp,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .navigationBarsPadding()
+                .padding(start = 16.dp, bottom = 24.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(contentAlignment = Alignment.TopEnd) {
+                    Icon(
+                        Icons.Outlined.NotificationsActive,
+                        contentDescription = "Report an incident",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(Color.Yellow)
+                    )
                 }
-                ActionTile(Icons.Outlined.People, "Passengers", "See who's booked", Modifier.weight(1f)) { }
+                HSpace(8.dp)
+                Text(
+                    text = "Report an incident",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White
+                )
             }
-            VSpace(28.dp)
-            PillButton("REPORT AN INCIDENT", onReportIncident, style = PillStyle.Danger, leadingIcon = Icons.Outlined.Warning)
-            VSpace(10.dp)
-            Text(
-                "Passengers and their emergency contacts get this bus's location straight away.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Muted,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
+        }
+
+        // Prominent Floating QR Scan Button at Bottom Center
+        Surface(
+            onClick = { showScan = true },
+            shape = CircleShape,
+            color = Orange,
+            shadowElevation = 14.dp,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Outlined.QrCodeScanner,
+                    contentDescription = "Scan QR Ticket",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+                HSpace(8.dp)
+                Text(
+                    text = "SCAN QR TICKET",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White
+                )
+            }
         }
     }
+
+    // Dialogs & Sheets
     if (showScan) {
         ScanResultDialog(onBoard = { boarded++; showScan = false }, onDismiss = { showScan = false })
     }
+
+    if (showPassengers) {
+        PassengersDialog(
+            bus = activeBus,
+            boardedCount = boarded,
+            onScan = { showScan = true },
+            onDismiss = { showPassengers = false }
+        )
+    }
+
+    if (showAddBus) {
+        AddNewBusDialog(
+            onBusCreated = { createdBus ->
+                activeBus = createdBus
+                onBusUpdated(createdBus)
+            },
+            onDismiss = { showAddBus = false }
+        )
+    }
+}
+
+/** "Add New Bus" Popup Form Dialog matching PostgreSQL buses table columns. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun AddNewBusDialog(
+    onBusCreated: (Bus) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var plateNumber by remember { mutableStateOf("") }
+    var operatorName by remember { mutableStateOf("") }
+    var routeNumber by remember { mutableStateOf("06") }
+    var category by remember { mutableStateOf(BusCategory.NORMAL) }
+    var origin by remember { mutableStateOf("") }
+    var destination by remember { mutableStateOf("") }
+    var departureTime by remember { mutableStateOf("06:00") }
+    var arrivalTime by remember { mutableStateOf("08:30") }
+    var duration by remember { mutableStateOf("2h 30m") }
+    var seatCapacityText by remember { mutableStateOf("40") }
+    var fareText by remember { mutableStateOf("850") }
+    var selectedAmenities by remember { mutableStateOf(setOf("A/C")) }
+    var isSubmitting by remember { mutableStateOf(false) }
+
+    val availableAmenities = listOf("A/C", "Wi-Fi", "USB Charging", "Reclining Seats", "Curtains")
+
+    AlertDialog(
+        onDismissRequest = { if (!isSubmitting) onDismiss() },
+        containerColor = Cream,
+        shape = RoundedCornerShape(24.dp),
+        icon = {
+            Icon(
+                Icons.Outlined.DirectionsBus,
+                contentDescription = null,
+                tint = Orange,
+                modifier = Modifier.size(40.dp)
+            )
+        },
+        title = {
+            Text(
+                text = "Add New Bus",
+                style = MaterialTheme.typography.headlineSmall,
+                color = Ink,
+                textAlign = TextAlign.Center
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                SoftTextField(
+                    value = plateNumber,
+                    onValueChange = { plateNumber = it },
+                    label = "Plate Number*",
+                    placeholder = "e.g. NC-4589",
+                    leadingIcon = Icons.Outlined.ConfirmationNumber
+                )
+
+                SoftTextField(
+                    value = operatorName,
+                    onValueChange = { operatorName = it },
+                    label = "Operator Name",
+                    placeholder = "e.g. Wayamba Express",
+                    leadingIcon = Icons.Outlined.Business
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        SoftTextField(
+                            value = routeNumber,
+                            onValueChange = { routeNumber = it },
+                            label = "Route Number",
+                            placeholder = "e.g. 06",
+                            leadingIcon = Icons.Outlined.Route
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        SoftTextField(
+                            value = seatCapacityText,
+                            onValueChange = { seatCapacityText = it },
+                            label = "Seat Capacity",
+                            placeholder = "e.g. 40",
+                            leadingIcon = Icons.Outlined.EventSeat,
+                            keyboardType = KeyboardType.Number
+                        )
+                    }
+                }
+
+                SectionLabel("Bus Category")
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    BusCategory.entries.forEach { cat ->
+                        SelectChip(
+                            label = cat.label,
+                            selected = category == cat,
+                            onClick = { category = cat }
+                        )
+                    }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        SoftTextField(
+                            value = origin,
+                            onValueChange = { origin = it },
+                            label = "Origin*",
+                            placeholder = "e.g. Kurunegala",
+                            leadingIcon = Icons.Outlined.Place
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        SoftTextField(
+                            value = destination,
+                            onValueChange = { destination = it },
+                            label = "Destination*",
+                            placeholder = "e.g. Colombo Fort",
+                            leadingIcon = Icons.Outlined.Place
+                        )
+                    }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        SoftTextField(
+                            value = departureTime,
+                            onValueChange = { departureTime = it },
+                            label = "Departure",
+                            placeholder = "06:00",
+                            leadingIcon = Icons.Outlined.Schedule
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        SoftTextField(
+                            value = arrivalTime,
+                            onValueChange = { arrivalTime = it },
+                            label = "Arrival",
+                            placeholder = "08:30",
+                            leadingIcon = Icons.Outlined.Schedule
+                        )
+                    }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        SoftTextField(
+                            value = duration,
+                            onValueChange = { duration = it },
+                            label = "Trip Duration",
+                            placeholder = "2h 30m",
+                            leadingIcon = Icons.Outlined.Timer
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        SoftTextField(
+                            value = fareText,
+                            onValueChange = { fareText = it },
+                            label = "Ticket Fare (LKR)",
+                            placeholder = "850",
+                            leadingIcon = Icons.Outlined.AttachMoney,
+                            keyboardType = KeyboardType.Number
+                        )
+                    }
+                }
+
+                SectionLabel("Amenities")
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    availableAmenities.forEach { amenity ->
+                        val isSelected = amenity in selectedAmenities
+                        SelectChip(
+                            label = amenity,
+                            selected = isSelected,
+                            onClick = {
+                                selectedAmenities = if (isSelected) {
+                                    selectedAmenities - amenity
+                                } else {
+                                    selectedAmenities + amenity
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            PillButton(
+                text = "Done",
+                onClick = {
+                    if (plateNumber.isBlank()) {
+                        Toast.makeText(context, "Please enter plate number", Toast.LENGTH_SHORT).show()
+                        return@PillButton
+                    }
+                    if (origin.isBlank() || destination.isBlank()) {
+                        Toast.makeText(context, "Please enter origin and destination", Toast.LENGTH_SHORT).show()
+                        return@PillButton
+                    }
+
+                    val seats = seatCapacityText.toIntOrNull() ?: 40
+                    val fareVal = fareText.toDoubleOrNull() ?: 850.0
+
+                    isSubmitting = true
+                    BusNetworkManager.createBus(
+                        context = context,
+                        plateNumber = plateNumber,
+                        operatorName = operatorName.ifBlank { "Ceylon Express" },
+                        routeNumber = routeNumber.ifBlank { "06" },
+                        category = category.label,
+                        origin = origin,
+                        destination = destination,
+                        departureTime = departureTime.ifBlank { "06:00" },
+                        arrivalTime = arrivalTime.ifBlank { "08:30" },
+                        duration = duration.ifBlank { "2h 30m" },
+                        seatCapacity = seats,
+                        fare = fareVal,
+                        amenities = selectedAmenities.toList()
+                    ) { success, message, createdBus ->
+                        isSubmitting = false
+                        if (success && createdBus != null) {
+                            Toast.makeText(context, "Bus saved to database successfully!", Toast.LENGTH_SHORT).show()
+                            onBusCreated(createdBus)
+                            onDismiss()
+                        } else {
+                            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                },
+                loading = isSubmitting,
+                enabled = !isSubmitting,
+                height = 42.dp
+            )
+        },
+        dismissButton = {
+            TextButton(
+                onClick = { if (!isSubmitting) onDismiss() },
+                enabled = !isSubmitting
+            ) {
+                Text("Cancel", color = Muted)
+            }
+        }
+    )
+}
+
+/** Passengers Manifest Dialog showing booked seats and status. */
+@Composable
+fun PassengersDialog(
+    bus: Bus,
+    boardedCount: Int,
+    onScan: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Cream,
+        shape = RoundedCornerShape(24.dp),
+        icon = {
+            Icon(
+                Icons.Outlined.People,
+                contentDescription = null,
+                tint = Orange,
+                modifier = Modifier.size(40.dp)
+            )
+        },
+        title = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "Passengers Manifest",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = Ink,
+                    textAlign = TextAlign.Center
+                )
+                VSpace(4.dp)
+                Text(
+                    text = "$boardedCount / ${bus.totalSeats} seats filled",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Muted
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 280.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (boardedCount == 0) {
+                    Text(
+                        "No passengers checked in yet. Scan passenger tickets to check them in.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Muted,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)
+                    )
+                } else {
+                    (1..boardedCount).forEach { seat ->
+                        SoftCard(color = Color.White, padding = 12.dp) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(OrangeSoft),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        "#$seat",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = OrangeDeep
+                                    )
+                                }
+                                HSpace(12.dp)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Passenger (Seat $seat)",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = Ink
+                                    )
+                                    Text(
+                                        "Checked In & Scanned",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Success
+                                    )
+                                }
+                                Icon(
+                                    Icons.Outlined.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Success,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            PillButton(
+                text = "Scan Ticket",
+                onClick = {
+                    onDismiss()
+                    onScan()
+                },
+                leadingIcon = Icons.Outlined.QrCodeScanner,
+                height = 42.dp
+            )
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close", color = Muted)
+            }
+        }
+    )
 }

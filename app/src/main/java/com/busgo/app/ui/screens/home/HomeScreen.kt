@@ -35,18 +35,18 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
-// Demo/Mock data references commented out for 100% real database sync
-// import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
+import com.busgo.app.ui.components.map.*
 import com.busgo.app.ui.theme.*
 import com.busgo.app.util.*
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.busgo.app.ui.components.map.*
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     draft: BookingDraft,
@@ -56,21 +56,8 @@ fun HomeScreen(
     onTrackBus: (Bus) -> Unit
 ) {
     var departure by rememberSaveable { mutableFloatStateOf(0.35f) }
+    var showDatePicker by remember { mutableStateOf(false) }
     val today = remember { LocalDate.now() }
-    val dates = remember { (0..6).map { today.plusDays(it.toLong()) } }
-
-    var busesList by remember { mutableStateOf<List<Bus>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-
-    LaunchedEffect(Unit) {
-        com.busgo.app.data.BusNetworkManager.getAllBuses { fetched ->
-            // Connected to real PostgreSQL database
-            busesList = fetched
-            isLoading = false
-        }
-    }
-
-    val liveBuses = busesList.filter { it.speedKmh > 0 || it.etaMinutes > 0 }
 
     Column(
         Modifier
@@ -102,13 +89,50 @@ fun HomeScreen(
         }
 
         Column(Modifier.padding(horizontal = 20.dp).padding(top = 24.dp)) {
-            SectionTitle("When")
+            SectionTitle("Travel Date")
             VSpace(12.dp)
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(dates) { d ->
-                    SelectChip(d.chipLabel(today), draft.date == d, { onDraftChange(draft.copy(date = d)) })
+            SoftCard(
+                onClick = { showDatePicker = true },
+                padding = 16.dp,
+                color = Color.White
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(OrangeSoft),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Outlined.CalendarToday,
+                            contentDescription = null,
+                            tint = Orange,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    HSpace(14.dp)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = draft.date.pretty(),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Ink
+                        )
+                        Text(
+                            text = if (draft.date == today) "Today" else if (draft.date == today.plusDays(1)) "Tomorrow" else "Selected travel date",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Muted
+                        )
+                    }
+                    TagChip(
+                        text = "PICK DATE",
+                        container = OrangeSoft,
+                        content = OrangeDeep
+                    )
                 }
-                item { SelectChip("Pick a date", false, { }, icon = Icons.Outlined.CalendarToday) }
             }
 
             VSpace(22.dp)
@@ -131,37 +155,12 @@ fun HomeScreen(
 
             VSpace(28.dp)
             PillButton("SEARCH BUSES", onSearch, leadingIcon = Icons.Outlined.Search)
-
-            VSpace(32.dp)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                SectionTitle("Live near you")
-                HSpace(8.dp)
-                LiveBadge()
-                Spacer(Modifier.weight(1f))
-                Text("${liveBuses.size} buses", style = MaterialTheme.typography.bodySmall, color = Muted)
-            }
-            VSpace(14.dp)
-            if (isLoading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally).padding(20.dp), color = Orange)
-            } else if (liveBuses.isEmpty()) {
-                Text(
-                    "No buses currently active near your location.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Muted,
-                    modifier = Modifier.padding(vertical = 12.dp)
-                )
-            } else {
-                liveBuses.forEach { bus ->
-                    LiveBusRow(bus) { onTrackBus(bus) }
-                    VSpace(12.dp)
-                }
-            }
+            VSpace(28.dp)
         }
 
-        // peach section
+        // Recent searches section
         Column(
             Modifier
-                .padding(top = 12.dp)
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
                 .background(Peach.copy(alpha = 0.55f))
@@ -192,6 +191,47 @@ fun HomeScreen(
                     }
                 }
             }
+        }
+    }
+
+    // Interactive Calendar DatePicker Dialog
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = ZoneId.systemDefault().let { zone ->
+                draft.date.atStartOfDay(zone).toInstant().toEpochMilli()
+            }
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val millis = datePickerState.selectedDateMillis
+                        if (millis != null) {
+                            val pickedLocalDate = Instant.ofEpochMilli(millis)
+                                .atZone(ZoneId.systemDefault())
+                                .toLocalDate()
+                            onDraftChange(draft.copy(date = pickedLocalDate))
+                        }
+                        showDatePicker = false
+                    }
+                ) {
+                    Text("OK", color = OrangeDeep, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Cancel", color = Muted)
+                }
+            }
+        ) {
+            DatePicker(
+                state = datePickerState,
+                colors = DatePickerDefaults.colors(
+                    selectedDayContainerColor = Orange,
+                    todayDateBorderColor = Orange
+                )
+            )
         }
     }
 }

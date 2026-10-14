@@ -35,7 +35,6 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
-import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
 import com.busgo.app.ui.theme.*
@@ -53,9 +52,27 @@ fun SegmentScreen(
     onBack: () -> Unit,
     onContinue: (Stop, Stop) -> Unit
 ) {
-    val stops = MockData.routeStops
-    var boarding by remember { mutableStateOf(draft.boarding ?: stops.first()) }
-    var alighting by remember { mutableStateOf(draft.alighting ?: stops.last()) }
+    val defaultOrigin = draft.bus?.from ?: draft.from.ifBlank { "Origin" }
+    val defaultDestination = draft.bus?.to ?: draft.to.ifBlank { "Destination" }
+    var loadedStops by remember { mutableStateOf<List<Stop>>(emptyList()) }
+
+    LaunchedEffect(draft.bus?.id) {
+        val busId = draft.bus?.id
+        if (!busId.isNullOrBlank()) {
+            com.busgo.app.data.BusNetworkManager.getBusStops(busId) { fetched ->
+                if (fetched.isNotEmpty()) {
+                    loadedStops = fetched
+                }
+            }
+        }
+    }
+
+    val stops = if (loadedStops.isNotEmpty()) loadedStops else listOf(
+        Stop("s1", defaultOrigin, "ORG", 0.0),
+        Stop("s2", defaultDestination, "DST", 94.0)
+    )
+    var boarding by remember(stops) { mutableStateOf(draft.boarding ?: stops.first()) }
+    var alighting by remember(stops) { mutableStateOf(draft.alighting ?: stops.last()) }
     val preview = draft.copy(boarding = boarding, alighting = alighting)
 
     GradientBackground(BusGoGradients.WarmTop) {

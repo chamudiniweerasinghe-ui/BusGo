@@ -35,7 +35,6 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
-import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
 import com.busgo.app.ui.theme.*
@@ -51,6 +50,7 @@ object Routes {
     const val LOGIN = "login"
     const val REGISTER = "register"
     const val HOME = "home"
+    const val MAP = "map"
     const val RESULTS = "results"
     const val TRACKING = "tracking"
     const val SEAT_COUNT = "seat_count"

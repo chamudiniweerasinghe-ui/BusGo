@@ -35,7 +35,6 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
-import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
 import com.busgo.app.ui.theme.*
@@ -52,18 +51,36 @@ fun SeatSelectionScreen(
     onBack: () -> Unit,
     onContinue: (List<Int>) -> Unit
 ) {
-    val bus = draft.bus ?: MockData.buses.first()
+    val bus = draft.bus ?: Bus(
+        id = "1",
+        number = "NC-0000",
+        operator = "BusGo",
+        routeNo = "06",
+        category = BusCategory.NORMAL,
+        from = draft.from.ifBlank { "Origin" },
+        to = draft.to.ifBlank { "Destination" },
+        departure = "06:00",
+        arrival = "08:30",
+        duration = "2h 30m",
+        seatsLeft = 40,
+        totalSeats = 40,
+        ratePerKm = 8.0,
+        routeKm = 94.0,
+        etaMinutes = 0,
+        nextStop = draft.from.ifBlank { "Origin" },
+        speedKmh = 0
+    )
     var loadedSeats by remember { mutableStateOf<List<Seat>>(emptyList()) }
 
-    LaunchedEffect(bus.id) {
-        com.busgo.app.data.BusNetworkManager.getBusSeats(bus.id) { fetched ->
+    LaunchedEffect(bus.id, draft.date) {
+        com.busgo.app.data.BusNetworkManager.getBusSeats(bus.id, draft.date.toString()) { fetched ->
             if (fetched.isNotEmpty()) {
                 loadedSeats = fetched
             }
         }
     }
 
-    val seats = if (loadedSeats.isNotEmpty()) loadedSeats else MockData.seatsFor(bus)
+    val seats = if (loadedSeats.isNotEmpty()) loadedSeats else (1..bus.totalSeats).map { Seat(it, SeatState.AVAILABLE) }
     var selected by remember { mutableStateOf(draft.seats) }
     val needed = draft.seatCount
 

@@ -60,6 +60,7 @@ import com.busgo.app.ui.screens.booking.SegmentScreen
 import com.busgo.app.ui.screens.driver.DriverScreen
 import com.busgo.app.ui.screens.emergency.ReportIncidentScreen
 import com.busgo.app.ui.screens.home.HomeScreen
+import com.busgo.app.ui.screens.map.MapScreen
 import com.busgo.app.ui.screens.payment.PaymentScreen
 import com.busgo.app.ui.screens.profile.ProfileScreen
 import com.busgo.app.ui.screens.search.SearchResultsScreen
@@ -81,6 +82,7 @@ fun BusGoNavGraph() {
 
     val tabs = listOf(
         BottomTab(Routes.HOME, "Home", Icons.Outlined.Home),
+        BottomTab(Routes.MAP, "Map", Icons.Outlined.Map),
         BottomTab(Routes.TICKETS, "Tickets", Icons.Outlined.ConfirmationNumber),
         BottomTab(Routes.ALERTS, "Alerts", Icons.Outlined.NotificationsNone),
         BottomTab(Routes.PROFILE, "Profile", Icons.Outlined.PersonOutline)
@@ -145,6 +147,15 @@ fun BusGoNavGraph() {
                     }
                 )
             }
+            composable(Routes.MAP) {
+                MapScreen(
+                    onTrackBus = { bus ->
+                        draft = draft.copy(bus = bus)
+                        nav.navigate(Routes.TRACKING)
+                    },
+                    onOpenAlerts = { goTab(Routes.ALERTS) }
+                )
+            }
             composable(Routes.TICKETS) {
                 MyTicketsScreen(tickets) { t ->
                     openTicketId = t.id
@@ -183,22 +194,22 @@ fun BusGoNavGraph() {
             composable(Routes.TRACKING) {
                 val currentBus = draft.bus ?: Bus(
                     id = "1",
-                    number = "NC-4589",
-                    operator = "Wayamba Express",
-                    routeNo = "06",
-                    category = BusCategory.LUXURY,
-                    from = "Kurunegala",
-                    to = "Colombo Fort",
-                    departure = "06:00",
-                    arrival = "08:30",
-                    duration = "2h 30m",
+                    number = "",
+                    operator = "BusGo",
+                    routeNo = "",
+                    category = BusCategory.NORMAL,
+                    from = draft.from.ifBlank { "Origin" },
+                    to = draft.to.ifBlank { "Destination" },
+                    departure = "00:00",
+                    arrival = "00:00",
+                    duration = "",
                     seatsLeft = 40,
                     totalSeats = 40,
-                    ratePerKm = 9.0,
-                    routeKm = 94.0,
-                    etaMinutes = 20,
-                    nextStop = "Kurunegala",
-                    speedKmh = 58
+                    ratePerKm = 0.0,
+                    routeKm = 0.0,
+                    etaMinutes = 0,
+                    nextStop = "",
+                    speedKmh = 0
                 )
                 LiveTrackingScreen(currentBus, onBack = pop, onBook = {
                     draft = draft.copy(bus = currentBus, seats = emptyList())
@@ -234,28 +245,28 @@ fun BusGoNavGraph() {
             composable(Routes.TICKET) {
                 val fallbackBus = Bus(
                     id = "1",
-                    number = "NC-4589",
-                    operator = "Wayamba Express",
-                    routeNo = "06",
-                    category = BusCategory.LUXURY,
-                    from = "Kurunegala",
-                    to = "Colombo Fort",
-                    departure = "06:00",
-                    arrival = "08:30",
-                    duration = "2h 30m",
+                    number = "",
+                    operator = "BusGo",
+                    routeNo = "",
+                    category = BusCategory.NORMAL,
+                    from = draft.from.ifBlank { "Origin" },
+                    to = draft.to.ifBlank { "Destination" },
+                    departure = "00:00",
+                    arrival = "00:00",
+                    duration = "",
                     seatsLeft = 40,
                     totalSeats = 40,
-                    ratePerKm = 9.0,
-                    routeKm = 94.0,
-                    etaMinutes = 20,
-                    nextStop = "Kurunegala",
-                    speedKmh = 58
+                    ratePerKm = 0.0,
+                    routeKm = 0.0,
+                    etaMinutes = 0,
+                    nextStop = "",
+                    speedKmh = 0
                 )
                 val ticket = tickets.firstOrNull { it.id == openTicketId } ?: tickets.firstOrNull() ?: Ticket(
-                    id = openTicketId ?: "BG-100001",
+                    id = openTicketId ?: "BG-000000",
                     bus = draft.bus ?: fallbackBus,
-                    boarding = draft.boarding ?: Stop("1", "Kurunegala", "KRN", 0.0),
-                    alighting = draft.alighting ?: Stop("7", "Colombo Fort", "FOT", 94.0),
+                    boarding = draft.boarding ?: Stop("1", "Origin", "ORG", 0.0),
+                    alighting = draft.alighting ?: Stop("2", "Destination", "DST", 0.0),
                     date = draft.date,
                     seats = if (draft.seats.isNotEmpty()) draft.seats else listOf(1),
                     fare = draft.totalFare,
@@ -275,22 +286,22 @@ fun BusGoNavGraph() {
             composable(Routes.DRIVER) {
                 val driverBus = myBus ?: Bus(
                     id = "1",
-                    number = "NC-4589",
-                    operator = "Wayamba Express",
-                    routeNo = "06",
-                    category = BusCategory.LUXURY,
-                    from = "Kurunegala",
-                    to = "Colombo Fort",
-                    departure = "06:00",
-                    arrival = "08:30",
-                    duration = "2h 30m",
+                    number = "",
+                    operator = "BusGo",
+                    routeNo = "",
+                    category = BusCategory.NORMAL,
+                    from = "Origin",
+                    to = "Destination",
+                    departure = "00:00",
+                    arrival = "00:00",
+                    duration = "",
                     seatsLeft = 40,
                     totalSeats = 40,
-                    ratePerKm = 9.0,
-                    routeKm = 94.0,
-                    etaMinutes = 20,
-                    nextStop = "Kurunegala",
-                    speedKmh = 58
+                    ratePerKm = 0.0,
+                    routeKm = 0.0,
+                    etaMinutes = 0,
+                    nextStop = "",
+                    speedKmh = 0
                 )
                 DriverScreen(
                     bus = driverBus,
