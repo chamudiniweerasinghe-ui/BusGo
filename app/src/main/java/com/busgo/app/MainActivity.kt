@@ -3,16 +3,17 @@ package com.busgo.app
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.fragment.app.FragmentActivity
 import com.busgo.app.data.FcmNetworkManager
+import com.busgo.app.data.SessionManager
 import com.busgo.app.navigation.BusGoNavGraph
 import com.busgo.app.ui.theme.BusGoTheme
 import com.google.firebase.messaging.FirebaseMessaging
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -35,6 +36,11 @@ class MainActivity : ComponentActivity() {
                 BusGoNavGraph()
             }
         }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        SessionManager.saveBackgroundTime(applicationContext, System.currentTimeMillis())
     }
 
     private fun requestNotificationPermission() {

@@ -1,5 +1,6 @@
 package com.busgo.app.ui.screens.alerts
 
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -25,6 +26,7 @@ import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -35,8 +37,7 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
-// Demo/Mock data references commented out for 100% real database sync
-// import com.busgo.app.data.mock.MockData
+import com.busgo.app.data.AlertNetworkManager
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
 import com.busgo.app.ui.theme.*
@@ -44,16 +45,16 @@ import com.busgo.app.util.*
 import java.time.LocalDate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.busgo.app.ui.components.map.*
 
 @Composable
 fun AlertsScreen(alerts: List<AlertItem>, onViewOnMap: () -> Unit) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     var realAlerts by remember { mutableStateOf<List<AlertItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var isClearing by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        com.busgo.app.data.AlertNetworkManager.getAlerts(context) { fetched ->
+        AlertNetworkManager.getAlerts(context) { fetched ->
             realAlerts = fetched
             isLoading = false
         }
@@ -65,7 +66,7 @@ fun AlertsScreen(alerts: List<AlertItem>, onViewOnMap: () -> Unit) {
         NavyHeader(title = "Alerts", leading = { GridLogo() }, actions = { LiveBadge(onDark = true) }) {
             VSpace(10.dp)
             Text(
-                "Safety notices, delays and booking updates for your trips.",
+                "Safety notices, departure reminders and route alerts for your trips.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.7f)
             )
@@ -83,11 +84,35 @@ fun AlertsScreen(alerts: List<AlertItem>, onViewOnMap: () -> Unit) {
                 }
             } else if (displayAlerts.isEmpty()) {
                 item {
-                    EmptyState(Icons.Outlined.NotificationsNone, "No active alerts", "System notifications and route alerts will appear here.")
+                    EmptyState(Icons.Outlined.NotificationsNone, "No active alerts", "Departure reminders and route alerts will appear here.")
                 }
             } else {
                 items(displayAlerts, key = { it.id }) { a ->
                     if (a.type == AlertType.EMERGENCY) EmergencyAlertCard(a, onViewOnMap) else AlertRow(a)
+                }
+                item {
+                    VSpace(8.dp)
+                    PillButton(
+                        text = "CLEAR ALL NOTIFICATIONS",
+                        onClick = {
+                            isClearing = true
+                            AlertNetworkManager.clearAlerts(context) { success, msg ->
+                                isClearing = false
+                                if (success) {
+                                    realAlerts = emptyList()
+                                    Toast.makeText(context, "Notifications cleared successfully!", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        loading = isClearing,
+                        enabled = !isClearing,
+                        style = PillStyle.Outline,
+                        leadingIcon = Icons.Outlined.DeleteSweep,
+                        height = 42.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }

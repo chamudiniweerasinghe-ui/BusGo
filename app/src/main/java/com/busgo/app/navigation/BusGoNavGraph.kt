@@ -72,34 +72,45 @@ import com.busgo.app.ui.screens.welcome.WelcomeScreen
 
 @Composable
 fun BusGoNavGraph() {
-    val nav = rememberNavController()
-    var draft by remember { mutableStateOf(BookingDraft()) }
-    val tickets = remember { mutableStateListOf<Ticket>() }
-    var myBus by remember { mutableStateOf<Bus?>(null) }
-    var openTicketId by rememberSaveable { mutableStateOf<String?>(null) }
-    val backStack by nav.currentBackStackEntryAsState()
-    val currentRoute = backStack?.destination?.route
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var isAppLocked by remember { mutableStateOf(com.busgo.app.data.SessionManager.shouldShowAppLock(context)) }
 
-    val tabs = listOf(
-        BottomTab(Routes.HOME, "Home", Icons.Outlined.Home),
-        BottomTab(Routes.MAP, "Map", Icons.Outlined.Map),
-        BottomTab(Routes.TICKETS, "Tickets", Icons.Outlined.ConfirmationNumber),
-        BottomTab(Routes.ALERTS, "Alerts", Icons.Outlined.NotificationsNone),
-        BottomTab(Routes.PROFILE, "Profile", Icons.Outlined.PersonOutline)
-    )
+    if (isAppLocked) {
+        com.busgo.app.ui.screens.security.AppLockScreen(
+            onUnlocked = {
+                isAppLocked = false
+                com.busgo.app.data.SessionManager.saveBackgroundTime(context, 0L)
+            }
+        )
+    } else {
+        val nav = rememberNavController()
+        var draft by remember { mutableStateOf(BookingDraft()) }
+        val tickets = remember { mutableStateListOf<Ticket>() }
+        var myBus by remember { mutableStateOf<Bus?>(null) }
+        var openTicketId by rememberSaveable { mutableStateOf<String?>(null) }
+        val backStack by nav.currentBackStackEntryAsState()
+        val currentRoute = backStack?.destination?.route
 
-    val pop: () -> Unit = { nav.popBackStack() }
-    fun goTab(route: String) = nav.navigate(route) {
-        popUpTo(Routes.HOME) { saveState = true }
-        launchSingleTop = true
-        restoreState = true
-    }
-    fun startFresh(route: String) = nav.navigate(route) {
-        popUpTo(nav.graph.id) { inclusive = true }
-    }
+        val tabs = listOf(
+            BottomTab(Routes.HOME, "Home", Icons.Outlined.Home),
+            BottomTab(Routes.MAP, "Map", Icons.Outlined.Map),
+            BottomTab(Routes.TICKETS, "Tickets", Icons.Outlined.ConfirmationNumber),
+            BottomTab(Routes.ALERTS, "Alerts", Icons.Outlined.NotificationsNone),
+            BottomTab(Routes.PROFILE, "Profile", Icons.Outlined.PersonOutline)
+        )
 
-    Box(Modifier.fillMaxSize().background(Cream)) {
-        NavHost(
+        val pop: () -> Unit = { nav.popBackStack() }
+        fun goTab(route: String) = nav.navigate(route) {
+            popUpTo(Routes.HOME) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+        fun startFresh(route: String) = nav.navigate(route) {
+            popUpTo(nav.graph.id) { inclusive = true }
+        }
+
+        Box(Modifier.fillMaxSize().background(Cream)) {
+            NavHost(
             navController = nav,
             startDestination = Routes.SPLASH,
             enterTransition = { fadeIn(tween(280)) + slideInHorizontally(tween(280)) { it / 10 } },
@@ -333,4 +344,5 @@ fun BusGoNavGraph() {
             )
         }
     }
+}
 }

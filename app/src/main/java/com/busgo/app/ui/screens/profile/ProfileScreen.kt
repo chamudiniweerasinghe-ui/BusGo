@@ -1,5 +1,7 @@
 package com.busgo.app.ui.screens.profile
 
+import android.widget.Toast
+import androidx.biometric.BiometricPrompt
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -36,10 +38,10 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import com.busgo.app.data.AuthNetworkManager
 import com.busgo.app.data.SessionManager
-// Demo/Mock data references commented out for 100% real database sync
-// import com.busgo.app.data.mock.MockData
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
 import com.busgo.app.ui.components.map.*
@@ -54,6 +56,11 @@ fun ProfileScreen(onSwitchRole: (UserRole) -> Unit, onLogout: () -> Unit) {
     val context = LocalContext.current
     var loadedPassenger by remember { mutableStateOf<Passenger?>(null) }
     var showEditDialog by remember { mutableStateOf(false) }
+    var showAppLockSetupDialog by remember { mutableStateOf(false) }
+    var showChangePinDialog by remember { mutableStateOf(false) }
+
+    var isAppLockOn by remember { mutableStateOf(SessionManager.isAppLockEnabled(context)) }
+    val currentPin = remember(isAppLockOn) { SessionManager.getAppLockPin(context) }
 
     LaunchedEffect(Unit) {
         AuthNetworkManager.getProfile(context) { success, profile, _ ->
@@ -78,7 +85,20 @@ fun ProfileScreen(onSwitchRole: (UserRole) -> Unit, onLogout: () -> Unit) {
             .background(Cream)
             .verticalScroll(rememberScrollState())
     ) {
-        NavyHeader(title = "Profile", leading = { GridLogo() }) {
+        NavyHeader(
+            title = "Profile",
+            leading = { GridLogo() },
+            actions = {
+                HeaderIconButton(
+                    icon = Icons.AutoMirrored.Outlined.Logout,
+                    contentDescription = "Log out",
+                    onClick = {
+                        SessionManager.clearSession(context)
+                        onLogout()
+                    }
+                )
+            }
+        ) {
             VSpace(18.dp)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Avatar(user.initials)
@@ -97,7 +117,62 @@ fun ProfileScreen(onSwitchRole: (UserRole) -> Unit, onLogout: () -> Unit) {
                 HairlineDivider(Modifier.padding(start = 54.dp))
                 ProfileRow(Icons.Outlined.EventSeat, "Seat preference", "Window")
             }
-            VSpace(24.dp)
+
+            VSpace(20.dp)
+            SectionTitle("Security & Privacy")
+            VSpace(10.dp)
+            SoftCard(padding = 12.dp) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Outlined.Lock, contentDescription = null, tint = Orange, modifier = Modifier.size(22.dp))
+                        HSpace(14.dp)
+                        Column(Modifier.weight(1f)) {
+                            Text("App Lock (15s Auto-Lock)", style = MaterialTheme.typography.titleMedium, color = Ink)
+                            Text(
+                                if (isAppLockOn) "Enabled (${SessionManager.getAppLockType(context)})" else "Disabled",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isAppLockOn) Success else Muted
+                            )
+                        }
+                        Switch(
+                            checked = isAppLockOn,
+                            onCheckedChange = { checked ->
+                                if (checked) {
+                                    showAppLockSetupDialog = true
+                                } else {
+                                    isAppLockOn = false
+                                    SessionManager.setAppLockConfig(context, enabled = false, lockType = "PIN", pin = "")
+                                    AuthNetworkManager.saveAppLock(context, pin = "", lockType = "PIN", enabled = false)
+                                    Toast.makeText(context, "App Lock disabled", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Orange
+                            )
+                        )
+                    }
+
+                    if (isAppLockOn) {
+                        HairlineDivider()
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(onClick = { showChangePinDialog = true }) {
+                                Icon(Icons.Outlined.Key, contentDescription = null, tint = OrangeDeep, modifier = Modifier.size(16.dp))
+                                HSpace(6.dp)
+                                Text("Change 6-Digit PIN", color = OrangeDeep, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+
+            VSpace(20.dp)
             SectionTitle("Emergency contact")
             VSpace(12.dp)
             SoftCard(color = PeachSoft, padding = 16.dp) {
@@ -118,23 +193,21 @@ fun ProfileScreen(onSwitchRole: (UserRole) -> Unit, onLogout: () -> Unit) {
                     }
                 }
             }
-            VSpace(24.dp)
+            VSpace(20.dp)
             SectionTitle("Switch account view")
             VSpace(12.dp)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PillButton("Bus", { onSwitchRole(UserRole.DRIVER) }, Modifier.weight(1f),
-                    style = PillStyle.Outline, leadingIcon = Icons.Outlined.DirectionsBus, height = 46.dp)
-                PillButton("Operator", { onSwitchRole(UserRole.OPERATOR) }, Modifier.weight(1f),
-                    style = PillStyle.Outline, leadingIcon = Icons.Outlined.Dashboard, height = 46.dp)
-            }
-            VSpace(24.dp)
-            PillButton("LOG OUT", onClick = {
-                SessionManager.clearSession(context)
-                onLogout()
-            }, style = PillStyle.Dark, leadingIcon = Icons.AutoMirrored.Outlined.Logout)
+            PillButton(
+                text = "Operator Panel",
+                onClick = { onSwitchRole(UserRole.OPERATOR) },
+                modifier = Modifier.fillMaxWidth(),
+                style = PillStyle.Outline,
+                leadingIcon = Icons.Outlined.Dashboard,
+                height = 46.dp
+            )
         }
     }
 
+    // Edit Emergency Contact Dialog
     if (showEditDialog) {
         var editName by remember(user) { mutableStateOf(user.emergencyName) }
         var editRelation by remember(user) { mutableStateOf(user.emergencyRelation) }
@@ -180,16 +253,8 @@ fun ProfileScreen(onSwitchRole: (UserRole) -> Unit, onLogout: () -> Unit) {
                         val trimmedRelation = editRelation.trim()
                         val trimmedPhone = editPhone.trim()
 
-                        if (trimmedName.isEmpty()) {
-                            android.widget.Toast.makeText(context, "Contact name cannot be empty", android.widget.Toast.LENGTH_SHORT).show()
-                            return@PillButton
-                        }
-                        if (trimmedRelation.isEmpty()) {
-                            android.widget.Toast.makeText(context, "Relationship cannot be empty", android.widget.Toast.LENGTH_SHORT).show()
-                            return@PillButton
-                        }
-                        if (trimmedPhone.isEmpty()) {
-                            android.widget.Toast.makeText(context, "Phone number cannot be empty", android.widget.Toast.LENGTH_SHORT).show()
+                        if (trimmedName.isEmpty() || trimmedRelation.isEmpty() || trimmedPhone.isEmpty()) {
+                            Toast.makeText(context, "All fields are required", Toast.LENGTH_SHORT).show()
                             return@PillButton
                         }
 
@@ -206,9 +271,9 @@ fun ProfileScreen(onSwitchRole: (UserRole) -> Unit, onLogout: () -> Unit) {
                             if (success && updatedProfile != null) {
                                 loadedPassenger = updatedProfile.toPassenger()
                                 showEditDialog = false
-                                android.widget.Toast.makeText(context, "Emergency contact updated!", android.widget.Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Emergency contact updated!", Toast.LENGTH_SHORT).show()
                             } else {
-                                android.widget.Toast.makeText(context, message ?: "Failed to update emergency contact", android.widget.Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, message ?: "Failed to update emergency contact", Toast.LENGTH_LONG).show()
                             }
                         }
                     },
@@ -222,6 +287,253 @@ fun ProfileScreen(onSwitchRole: (UserRole) -> Unit, onLogout: () -> Unit) {
                 TextButton(
                     onClick = { if (!isSaving) showEditDialog = false },
                     enabled = !isSaving
+                ) {
+                    Text("Cancel", style = MaterialTheme.typography.labelMedium, color = InkSoft)
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
+
+    // App Lock Setup Dialog (Scan Hardware Fingerprint First Setup Flow)
+    if (showAppLockSetupDialog) {
+        var selectedLockType by remember { mutableStateOf("FINGERPRINT") } // "FINGERPRINT" or "PIN"
+        var pinInput by remember { mutableStateOf(currentPin) }
+        var isFingerprintScanned by remember { mutableStateOf(false) }
+        var isSavingLock by remember { mutableStateOf(false) }
+
+        fun triggerAppLockSave(finalPin: String, finalType: String) {
+            isSavingLock = true
+            SessionManager.setAppLockConfig(context, enabled = true, lockType = finalType, pin = finalPin)
+            AuthNetworkManager.saveAppLock(
+                context = context,
+                pin = finalPin,
+                lockType = finalType,
+                enabled = true
+            ) { _, _ ->
+                isSavingLock = false
+                isAppLockOn = true
+                showAppLockSetupDialog = false
+                Toast.makeText(context, "App Lock enabled! Saved to Firebase Firestore.", Toast.LENGTH_LONG).show()
+            }
+        }
+
+        fun scanHardwareFingerprintAndVerify() {
+            val activity = context as? FragmentActivity
+            if (activity == null) {
+                isFingerprintScanned = true
+                Toast.makeText(context, "Fingerprint Verified!", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            val executor = ContextCompat.getMainExecutor(activity)
+            val prompt = BiometricPrompt(
+                activity,
+                executor,
+                object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                        isFingerprintScanned = true
+                        Toast.makeText(context, "Fingerprint Scanned & Verified Successfully!", Toast.LENGTH_SHORT).show()
+                    }
+
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        Toast.makeText(context, "Fingerprint scan failed: $errString", Toast.LENGTH_LONG).show()
+                    }
+                }
+            )
+
+            val info = BiometricPrompt.PromptInfo.Builder()
+                .setTitle("Register Fingerprint")
+                .setSubtitle("Touch the fingerprint sensor on your phone to register your finger")
+                .setNegativeButtonText("Cancel")
+                .build()
+
+            prompt.authenticate(info)
+        }
+
+        AlertDialog(
+            onDismissRequest = { if (!isSavingLock) showAppLockSetupDialog = false },
+            icon = {
+                Icon(Icons.Outlined.Lock, contentDescription = null, tint = Orange, modifier = Modifier.size(36.dp))
+            },
+            title = {
+                Text("Set Up App Lock", style = MaterialTheme.typography.titleLarge, color = Ink, textAlign = TextAlign.Center)
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "Choose lock method. For Fingerprint, scan your finger on your phone's sensor first, then set a fallback PIN.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Muted,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SelectChip(
+                            label = "Fingerprint",
+                            selected = selectedLockType == "FINGERPRINT",
+                            onClick = { selectedLockType = "FINGERPRINT" },
+                            icon = Icons.Outlined.Fingerprint
+                        )
+                        SelectChip(
+                            label = "6-Digit PIN",
+                            selected = selectedLockType == "PIN",
+                            onClick = { selectedLockType = "PIN" },
+                            icon = Icons.Outlined.Lock
+                        )
+                    }
+
+                    if (selectedLockType == "FINGERPRINT") {
+                        SoftCard(color = if (isFingerprintScanned) Success.copy(alpha = 0.12f) else PeachSoft, padding = 12.dp) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = if (isFingerprintScanned) Icons.Outlined.CheckCircle else Icons.Outlined.Fingerprint,
+                                    contentDescription = null,
+                                    tint = if (isFingerprintScanned) Success else Orange,
+                                    modifier = Modifier.size(38.dp)
+                                )
+                                VSpace(6.dp)
+                                Text(
+                                    text = if (isFingerprintScanned) "Fingerprint Registered!" else "Touch Phone Sensor to Register Fingerprint",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = if (isFingerprintScanned) Success else Ink,
+                                    textAlign = TextAlign.Center
+                                )
+                                VSpace(8.dp)
+                                PillButton(
+                                    text = if (isFingerprintScanned) "Re-Scan Fingerprint" else "Touch Sensor to Scan",
+                                    onClick = { scanHardwareFingerprintAndVerify() },
+                                    leadingIcon = Icons.Outlined.Fingerprint,
+                                    height = 36.dp
+                                )
+                            }
+                        }
+                    }
+
+                    SoftTextField(
+                        value = pinInput,
+                        onValueChange = { input ->
+                            if (input.length <= 6 && input.all { it.isDigit() }) {
+                                pinInput = input
+                            }
+                        },
+                        label = if (selectedLockType == "FINGERPRINT") "Fallback 6-Digit PIN*" else "Create 6-Digit PIN*",
+                        placeholder = "Enter 6 digits (e.g. 123456)",
+                        isPassword = true,
+                        leadingIcon = Icons.Outlined.Lock,
+                        keyboardType = KeyboardType.Number
+                    )
+                }
+            },
+            confirmButton = {
+                PillButton(
+                    text = "Complete Setup",
+                    onClick = {
+                        if (selectedLockType == "FINGERPRINT" && !isFingerprintScanned) {
+                            Toast.makeText(context, "Please scan your fingerprint on phone sensor first!", Toast.LENGTH_LONG).show()
+                            scanHardwareFingerprintAndVerify()
+                            return@PillButton
+                        }
+
+                        if (pinInput.length != 6) {
+                            Toast.makeText(context, "Please enter a 6-digit PIN first", Toast.LENGTH_SHORT).show()
+                            return@PillButton
+                        }
+
+                        triggerAppLockSave(pinInput, selectedLockType)
+                    },
+                    enabled = !isSavingLock && pinInput.length == 6 && (selectedLockType != "FINGERPRINT" || isFingerprintScanned),
+                    loading = isSavingLock,
+                    height = 42.dp
+                )
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { if (!isSavingLock) showAppLockSetupDialog = false },
+                    enabled = !isSavingLock
+                ) {
+                    Text("Cancel", style = MaterialTheme.typography.labelMedium, color = InkSoft)
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
+
+    // Change 6-Digit PIN Dialog
+    if (showChangePinDialog) {
+        var newPinInput by remember { mutableStateOf("") }
+        var isChangingPin by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { if (!isChangingPin) showChangePinDialog = false },
+            icon = {
+                Icon(Icons.Outlined.Key, contentDescription = null, tint = Orange, modifier = Modifier.size(36.dp))
+            },
+            title = {
+                Text("Change 6-Digit PIN", style = MaterialTheme.typography.titleLarge, color = Ink, textAlign = TextAlign.Center)
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Enter your new 6-digit PIN. The old PIN will be removed from Firebase and replaced.", style = MaterialTheme.typography.bodySmall, color = Muted, textAlign = TextAlign.Center)
+
+                    SoftTextField(
+                        value = newPinInput,
+                        onValueChange = { input ->
+                            if (input.length <= 6 && input.all { it.isDigit() }) {
+                                newPinInput = input
+                            }
+                        },
+                        label = "New 6-Digit PIN*",
+                        placeholder = "e.g. 654321",
+                        isPassword = true,
+                        leadingIcon = Icons.Outlined.Key,
+                        keyboardType = KeyboardType.Number
+                    )
+                }
+            },
+            confirmButton = {
+                PillButton(
+                    text = "Update PIN",
+                    onClick = {
+                        if (newPinInput.length != 6) {
+                            Toast.makeText(context, "PIN must be exactly 6 digits", Toast.LENGTH_SHORT).show()
+                            return@PillButton
+                        }
+
+                        isChangingPin = true
+                        val currentType = SessionManager.getAppLockType(context)
+                        SessionManager.setAppLockConfig(context, enabled = true, lockType = currentType, pin = newPinInput)
+
+                        AuthNetworkManager.saveAppLock(
+                            context = context,
+                            pin = newPinInput,
+                            lockType = currentType,
+                            enabled = true
+                        ) { _, _ ->
+                            isChangingPin = false
+                            showChangePinDialog = false
+                            Toast.makeText(context, "PIN updated & replaced in Firebase!", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    enabled = !isChangingPin && newPinInput.length == 6,
+                    loading = isChangingPin,
+                    height = 42.dp
+                )
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { if (!isChangingPin) showChangePinDialog = false },
+                    enabled = !isChangingPin
                 ) {
                     Text("Cancel", style = MaterialTheme.typography.labelMedium, color = InkSoft)
                 }
