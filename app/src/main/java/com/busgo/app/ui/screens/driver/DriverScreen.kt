@@ -167,13 +167,8 @@ fun DriverScreen(
     }
 
     Box(Modifier.fillMaxSize().background(Cream)) {
-        // Main scrollable view
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 120.dp)
-        ) {
+        Column(Modifier.fillMaxSize()) {
+            // FIXED Navy Header at the Top (Non-scrollable)
             NavyHeader(
                 title = "My bus",
                 leading = { GridLogo() },
@@ -215,71 +210,95 @@ fun DriverScreen(
                 }
             }
 
-            Column(Modifier.padding(horizontal = 20.dp).padding(top = 20.dp, bottom = 20.dp)) {
+            // Scrollable Content Below Navy Header
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 16.dp, bottom = 100.dp)
+            ) {
                 GpsShareCard(sharing) { sharing = it }
                 VSpace(12.dp)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    StatTile(Icons.Outlined.People, "$boarded/${activeBus.totalSeats}", "On board", Modifier.weight(1f))
-                    StatTile(Icons.Outlined.Schedule, activeBus.departure, "First trip", Modifier.weight(1f))
-                    StatTile(Icons.Outlined.Speed, "${activeBus.speedKmh} km/h", "Speed", Modifier.weight(1f))
-                }
+                
+                // On Board Stat Tile
+                StatTile(
+                    Icons.Outlined.People,
+                    "$boarded/${activeBus.totalSeats}",
+                    "On board",
+                    Modifier.fillMaxWidth()
+                )
 
-                VSpace(24.dp)
+                VSpace(20.dp)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     SectionTitle("Registered Fleet Buses", Modifier.weight(1f))
                     Text("${registeredBuses.size} buses", style = MaterialTheme.typography.bodySmall, color = Muted)
                 }
                 VSpace(12.dp)
 
-                if (isLoadingBuses) {
-                    Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = Orange)
-                    }
-                } else if (registeredBuses.isEmpty()) {
-                    SoftCard(padding = 16.dp) {
+                // Scrollable Card Container for Registered Buses List
+                SoftCard(
+                    padding = 16.dp,
+                    color = Color.White,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isLoadingBuses) {
+                        Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = Orange)
+                        }
+                    } else if (registeredBuses.isEmpty()) {
                         Text(
                             "No registered buses in database. Use Admin panel 'ADD BUS' to register new buses.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Muted,
                             textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)
                         )
-                    }
-                } else {
-                    registeredBuses.forEach { regBus ->
-                        val isCurrent = regBus.id == activeBus.id || regBus.number == activeBus.number
-                        SoftCard(
-                            onClick = {
-                                activeBus = regBus
-                                onBusUpdated(regBus)
-                            },
-                            color = if (isCurrent) OrangeSoft.copy(alpha = 0.5f) else Color.White,
-                            padding = 16.dp,
-                            modifier = Modifier.padding(bottom = 10.dp)
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 380.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    BusAvatar(size = 40.dp, container = if (isCurrent) Orange else Navy)
-                                    HSpace(12.dp)
-                                    Column(Modifier.weight(1f)) {
-                                        Text(regBus.number, style = MaterialTheme.typography.titleMedium, color = Ink)
-                                        Text("${regBus.operator} • Route ${regBus.routeNo}", style = MaterialTheme.typography.bodySmall, color = Muted)
+                            registeredBuses.forEach { regBus ->
+                                val isCurrent = regBus.id == activeBus.id || regBus.number == activeBus.number
+                                SoftCard(
+                                    onClick = {
+                                        activeBus = regBus
+                                        onBusUpdated(regBus)
+                                    },
+                                    color = if (isCurrent) OrangeSoft.copy(alpha = 0.5f) else Cream,
+                                    padding = 12.dp,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            BusAvatar(size = 36.dp, container = if (isCurrent) Orange else Navy)
+                                            HSpace(10.dp)
+                                            Column(Modifier.weight(1f)) {
+                                                Text(regBus.number, style = MaterialTheme.typography.titleMedium, color = Ink)
+                                                Text("${regBus.operator} • Route ${regBus.routeNo}", style = MaterialTheme.typography.bodySmall, color = Muted)
+                                            }
+                                            TagChip(
+                                                text = if (isCurrent) "OPERATING" else regBus.category.label,
+                                                container = if (isCurrent) Orange else CreamDeep,
+                                                content = if (isCurrent) Color.White else Ink
+                                            )
+                                        }
+                                        HairlineDivider()
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(regBus.from, style = MaterialTheme.typography.bodySmall, color = Ink, fontWeight = FontWeight.Bold)
+                                            HSpace(6.dp)
+                                            Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, tint = Muted, modifier = Modifier.size(14.dp))
+                                            HSpace(6.dp)
+                                            Text(regBus.to, style = MaterialTheme.typography.bodySmall, color = Ink, fontWeight = FontWeight.Bold)
+                                            Spacer(Modifier.weight(1f))
+                                            Text("LKR ${Math.round(regBus.ratePerKm * regBus.routeKm)}", style = MaterialTheme.typography.titleMedium, color = OrangeDeep)
+                                        }
                                     }
-                                    TagChip(
-                                        text = if (isCurrent) "OPERATING" else regBus.category.label,
-                                        container = if (isCurrent) Orange else CreamDeep,
-                                        content = if (isCurrent) Color.White else Ink
-                                    )
-                                }
-                                HairlineDivider()
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(regBus.from, style = MaterialTheme.typography.bodySmall, color = Ink, fontWeight = FontWeight.Bold)
-                                    HSpace(6.dp)
-                                    Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, tint = Muted, modifier = Modifier.size(14.dp))
-                                    HSpace(6.dp)
-                                    Text(regBus.to, style = MaterialTheme.typography.bodySmall, color = Ink, fontWeight = FontWeight.Bold)
-                                    Spacer(Modifier.weight(1f))
-                                    Text("LKR ${Math.round(regBus.ratePerKm * regBus.routeKm)}", style = MaterialTheme.typography.titleMedium, color = OrangeDeep)
                                 }
                             }
                         }
@@ -288,7 +307,7 @@ fun DriverScreen(
             }
         }
 
-        // Fixed Position Bell Pop-Up Button on Left Side ("Report an incident")
+        // Fixed Position Bell Pop-Up Button on Bottom Left ("Report an incident")
         Surface(
             onClick = onReportIncident,
             shape = CircleShape,
@@ -300,7 +319,7 @@ fun DriverScreen(
                 .padding(start = 16.dp, bottom = 24.dp)
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(contentAlignment = Alignment.TopEnd) {
@@ -326,32 +345,27 @@ fun DriverScreen(
             }
         }
 
-        // Prominent Floating QR Scan Button at Bottom Center
+        // Circular Round Floating QR Scan Button on Bottom Right
         Surface(
             onClick = { showScan = true },
             shape = CircleShape,
             color = Orange,
-            shadowElevation = 14.dp,
+            shadowElevation = 12.dp,
             modifier = Modifier
-                .align(Alignment.BottomCenter)
+                .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
-                .padding(bottom = 24.dp)
+                .padding(end = 20.dp, bottom = 24.dp)
+                .size(56.dp)
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize()
             ) {
                 Icon(
                     Icons.Outlined.QrCodeScanner,
-                    contentDescription = "Scan QR Ticket",
+                    contentDescription = "Scan QR Code",
                     tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
-                HSpace(8.dp)
-                Text(
-                    text = "SCAN QR TICKET",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = Color.White
+                    modifier = Modifier.size(28.dp)
                 )
             }
         }

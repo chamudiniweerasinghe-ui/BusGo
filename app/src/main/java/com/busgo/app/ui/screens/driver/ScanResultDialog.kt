@@ -1,6 +1,10 @@
 package com.busgo.app.ui.screens.driver
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -37,6 +41,7 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
+import androidx.core.content.ContextCompat
 import com.busgo.app.data.TicketNetworkManager
 import com.busgo.app.data.model.*
 import com.busgo.app.ui.components.*
@@ -62,20 +67,61 @@ data class VerificationResultData(
 @Composable
 fun ScanResultDialog(onBoard: () -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
+    var scanMode by rememberSaveable { mutableIntStateOf(0) } // 0 = QR Camera Scanner, 1 = Manual Text Input
     var ticketNumberInput by remember { mutableStateOf("") }
     var verificationResult by remember { mutableStateOf<VerificationResultData?>(null) }
     var isVerifying by remember { mutableStateOf(false) }
     var isBoarding by remember { mutableStateOf(false) }
 
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasCameraPermission = isGranted
+    }
+
+    LaunchedEffect(Unit) {
+        if (!hasCameraPermission && scanMode == 0) {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    fun verifyCode(code: String) {
+        if (code.isBlank() || isVerifying) return
+        isVerifying = true
+        TicketNetworkManager.verifyTicket(context, code.trim()) { success, msg, isValid, passName, seatsStr, routeText, travelDate, priceStr, ticketNum ->
+            isVerifying = false
+            if (success) {
+                verificationResult = VerificationResultData(
+                    statusText = msg,
+                    isValid = isValid,
+                    passengerName = passName ?: "Passenger",
+                    seatNumbers = seatsStr ?: "Seat assigned",
+                    routeText = routeText ?: "Route Details",
+                    travelDate = travelDate ?: "Date assigned",
+                    totalPrice = priceStr ?: "LKR 0",
+                    ticketNumber = ticketNum ?: code.trim()
+                )
+            } else {
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     if (verificationResult == null) {
-        // Step 1: Input or Scan Ticket Number
+        // Step 1: Scanner (default) or Manual Code Entry
         AlertDialog(
             onDismissRequest = onDismiss,
             containerColor = Cream,
             shape = RoundedCornerShape(24.dp),
             icon = {
                 Icon(
-                    Icons.Outlined.Warning,
+                    Icons.Outlined.QrCodeScanner,
                     contentDescription = null,
                     tint = Orange,
                     modifier = Modifier.size(40.dp)
@@ -95,48 +141,115 @@ fun ScanResultDialog(onBoard: () -> Unit, onDismiss: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = "Enter or scan ticket number (e.g. TKT-...)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Muted,
-                        textAlign = TextAlign.Center
-                    )
-                    SoftTextField(
-                        value = ticketNumberInput,
-                        onValueChange = { ticketNumberInput = it },
-                        label = "Ticket number",
-                        placeholder = "e.g. TKT-1791625152078-4176"
-                    )
+                    // Option Selector Tabs
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SelectChip(
+                            label = "Scan QR Code",
+                            selected = scanMode == 0,
+                            onClick = { scanMode = 0 },
+                            icon = Icons.Outlined.QrCodeScanner
+                        )
+                        SelectChip(
+                            label = "Enter Code",
+                            selected = scanMode == 1,
+                            onClick = { scanMode = 1 },
+                            icon = Icons.Outlined.Edit
+                        )
+                    }
+
+                    if (scanMode == 0) {
+                        // Live Camera Scanner Option
+                        if (hasCameraPermission) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(210.dp)
+                                    .clip(RoundedCornerShape(18.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CameraQrScannerView(
+                                    onQrScanned = { scannedCode ->
+                                        val lines = scannedCode.lines()
+                                        val primaryCode = lines.firstOrNull { it.contains("TKT-", true) || it.contains("BG-", true) }
+                                            ?: lines.firstOrNull()
+                                            ?: scannedCode
+                                        verifyCode(primaryCode.trim())
+                                    },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                if (isVerifying) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Color.Black.copy(alpha = 0.5f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(color = Orange)
+                                    }
+                                }
+                            }
+                            Text(
+                                text = "Point camera at passenger's ticket QR code",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Muted,
+                                textAlign = TextAlign.Center
+                            )
+                        } else {
+                            // Request Permission View
+                            SoftCard(padding = 16.dp, color = Color.White) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.Outlined.CameraAlt, contentDescription = null, tint = Orange, modifier = Modifier.size(32.dp))
+                                    VSpace(8.dp)
+                                    Text("Camera access required for scanning QR code", style = MaterialTheme.typography.bodySmall, color = Muted, textAlign = TextAlign.Center)
+                                    VSpace(12.dp)
+                                    PillButton(
+                                        text = "Allow Camera",
+                                        onClick = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) },
+                                        height = 38.dp
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        // Manual Ticket Code Input Option
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "Type or paste ticket number (e.g. TKT-...)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Muted,
+                                textAlign = TextAlign.Center
+                            )
+                            SoftTextField(
+                                value = ticketNumberInput,
+                                onValueChange = { ticketNumberInput = it },
+                                label = "Ticket number",
+                                placeholder = "e.g. TKT-1791625152078-4176"
+                            )
+                        }
+                    }
                 }
             },
             confirmButton = {
-                PillButton(
-                    text = "OK",
-                    onClick = {
-                        if (ticketNumberInput.isBlank()) return@PillButton
-                        isVerifying = true
-                        TicketNetworkManager.verifyTicket(context, ticketNumberInput.trim()) { success, msg, isValid, passName, seatsStr, routeText, travelDate, priceStr, ticketNum ->
-                            isVerifying = false
-                            if (success) {
-                                verificationResult = VerificationResultData(
-                                    statusText = msg,
-                                    isValid = isValid,
-                                    passengerName = passName ?: "Passenger",
-                                    seatNumbers = seatsStr ?: "Seat assigned",
-                                    routeText = routeText ?: "Route Details",
-                                    travelDate = travelDate ?: "Date assigned",
-                                    totalPrice = priceStr ?: "LKR 0",
-                                    ticketNumber = ticketNum ?: ticketNumberInput.trim()
-                                )
-                            } else {
-                                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    },
-                    loading = isVerifying,
-                    enabled = ticketNumberInput.isNotBlank() && !isVerifying,
-                    height = 42.dp
-                )
+                if (scanMode == 1) {
+                    PillButton(
+                        text = "OK",
+                        onClick = { verifyCode(ticketNumberInput) },
+                        loading = isVerifying,
+                        enabled = ticketNumberInput.isNotBlank() && !isVerifying,
+                        height = 42.dp
+                    )
+                } else {
+                    TextButton(onClick = { scanMode = 1 }) {
+                        Text("Enter Code Manually", color = OrangeDeep, fontWeight = FontWeight.Bold)
+                    }
+                }
             },
             dismissButton = {
                 TextButton(onClick = onDismiss, enabled = !isVerifying) {
@@ -145,7 +258,7 @@ fun ScanResultDialog(onBoard: () -> Unit, onDismiss: () -> Unit) {
             }
         )
     } else {
-        // Step 2: Verification Result Popup
+        // Step 2: Verification Result Popup (Identical details shown whether scanned or typed)
         val result = verificationResult!!
         AlertDialog(
             onDismissRequest = onDismiss,
